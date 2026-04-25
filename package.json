@@ -1,20 +1,86 @@
 {
   "name": "pesu-downloader",
   "version": "1.0.0",
-  "description": "Adaptive Playwright browser operator for downloading PESU Academy slide PDFs.",
-  "main": "scripts/pesu-agent.js",
+  "description": "Desktop and CLI downloader for PESU Academy slide PDFs powered by Playwright.",
+  "main": "src/desktop/main.js",
   "scripts": {
+    "postinstall": "node scripts/install-playwright-chromium.js",
+    "playwright:install": "node scripts/install-playwright-chromium.js",
     "pesu": "node scripts/pesu-download-slides.js",
     "pesu:debug": "PWDEBUG=1 node scripts/pesu-download-slides.js",
     "pesu:agent": "node scripts/pesu-agent.js",
-    "pesu:agent:debug": "PWDEBUG=1 node scripts/pesu-agent.js"
+    "pesu:agent:debug": "PWDEBUG=1 node scripts/pesu-agent.js",
+    "cli": "node src/cli/index.js",
+    "desktop": "electron --no-sandbox .",
+    "build:linux": "node scripts/install-playwright-chromium.js && electron-builder --linux AppImage",
+    "build:win": "node scripts/install-playwright-chromium.js && electron-builder --win nsis",
+    "build:mac": "node scripts/install-playwright-chromium.js && electron-builder --mac dmg"
   },
   "keywords": [],
-  "author": "",
+  "author": {
+    "name": "PESU Downloader",
+    "email": "support@pesu-downloader.local"
+  },
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
     "dotenv": "^17.4.2",
     "playwright": "^1.59.1"
+  },
+  "devDependencies": {
+    "electron": "^41.3.0",
+    "electron-builder": "^26.8.1"
+  },
+  "build": {
+    "appId": "com.pesu.downloader",
+    "productName": "PESU Academy Slide Downloader",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "scripts/**/*",
+      "package.json",
+      "package-lock.json",
+      "!downloads{,/**/*}",
+      "!logs{,/**/*}",
+      "!screenshots{,/**/*}",
+      "!debug{,/**/*}",
+      "!.chromium-profile{,/**/*}",
+      "!.tmp-downloads{,/**/*}",
+      "!.env"
+    ],
+    "extraResources": [
+      {
+        "from": "playwright-browsers",
+        "to": "playwright-browsers",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "asarUnpack": [
+      "node_modules/playwright/**/*",
+      "node_modules/playwright-core/**/*"
+    ],
+    "linux": {
+      "category": "Utility",
+      "maintainer": "PESU Downloader <support@pesu-downloader.local>",
+      "target": [
+        "AppImage",
+        "deb"
+      ]
+    },
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": [
+        "dmg"
+      ]
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    }
   }
 }

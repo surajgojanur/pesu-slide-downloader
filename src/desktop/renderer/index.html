@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PESU Academy Slide Downloader</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <section class="hero-panel">
+        <div class="hero-copy">
+          <p class="eyebrow">Desktop downloader</p>
+          <h1>PESU Academy Slide Downloader</h1>
+          <p class="hero-text">
+            Sign in once, choose a folder, and let the Playwright downloader pull course slides into the same course/unit
+            structure you already use.
+          </p>
+        </div>
+        <div class="hero-status">
+          <span id="statusBadge" class="status-badge">Idle</span>
+          <p id="statusText" class="status-text">Ready to start a new download run.</p>
+        </div>
+      </section>
+
+      <main class="content-grid">
+        <section class="control-panel">
+          <div class="panel-heading">
+            <h2>Run Settings</h2>
+            <p>Credentials stay in memory for the current run only.</p>
+          </div>
+
+          <label class="field">
+            <span>Username</span>
+            <input id="usernameInput" type="text" autocomplete="username" placeholder="PESU username" />
+          </label>
+
+          <label class="field">
+            <span>Password</span>
+            <input id="passwordInput" type="password" autocomplete="current-password" placeholder="PESU password" />
+          </label>
+
+          <div class="field">
+            <span>Output folder</span>
+            <div class="folder-row">
+              <input id="outputDirInput" type="text" readonly placeholder="Choose a download folder" />
+              <button id="chooseFolderButton" class="ghost-button" type="button">Browse</button>
+            </div>
+          </div>
+
+          <div class="action-row">
+            <button id="startButton" class="primary-button" type="button">Start Download</button>
+            <button id="openFolderButton" class="ghost-button" type="button">Open Folder</button>
+          </div>
+
+          <div class="progress-panel">
+            <div class="progress-heading">
+              <h3>Progress</h3>
+              <span id="progressMessage" class="progress-message">Waiting for input.</span>
+            </div>
+            <div class="summary-grid">
+              <article class="summary-card">
+                <span class="summary-label">Downloaded</span>
+                <strong id="downloadedCount">0</strong>
+              </article>
+              <article class="summary-card">
+                <span class="summary-label">Skipped</span>
+                <strong id="skippedCount">0</strong>
+              </article>
+              <article class="summary-card">
+                <span class="summary-label">Failed</span>
+                <strong id="failedCount">0</strong>
+              </article>
+            </div>
+          </div>
+        </section>
+
+        <section class="log-panel">
+          <div class="panel-heading">
+            <h2>Live Log</h2>
+            <p>Messages stream from the Electron main process while the downloader runs.</p>
+          </div>
+          <div id="logList" class="log-list" aria-live="polite"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="./renderer.js"></script>
+  </body>
+</html>

@@ -1,8 +1,11 @@
 node_modules/
 .env
 .chromium-profile/
+.tmp-downloads/
+playwright-browsers/
 logs/
 screenshots/
 debug/
 downloads/
+dist/
 *.log
