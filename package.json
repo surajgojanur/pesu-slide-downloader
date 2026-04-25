@@ -1,0 +1,20 @@
+{
+  "name": "pesu-downloader",
+  "version": "1.0.0",
+  "description": "Adaptive Playwright browser operator for downloading PESU Academy slide PDFs.",
+  "main": "scripts/pesu-agent.js",
+  "scripts": {
+    "pesu": "node scripts/pesu-download-slides.js",
+    "pesu:debug": "PWDEBUG=1 node scripts/pesu-download-slides.js",
+    "pesu:agent": "node scripts/pesu-agent.js",
+    "pesu:agent:debug": "PWDEBUG=1 node scripts/pesu-agent.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "playwright": "^1.59.1"
+  }
+}

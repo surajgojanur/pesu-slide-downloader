@@ -1,0 +1,701 @@
+{
+  "learnedAt": "2026-04-24T21:37:52.686Z",
+  "buckets": {
+    "navigation": {
+      "myCourses": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(1) > ul > li:nth-of-type(5) > a",
+          "text": "My Courses",
+          "reason": "visible navigation entry",
+          "learnedAt": "2026-04-24T20:17:25.518Z"
+        }
+      ]
+    },
+    "courseTables": {
+      "myCourses": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div > div:nth-of-type(2) > div > div:nth-of-type(3) > div > div > table",
+          "headers": [
+            "Course Code",
+            "Course Title",
+            "Course Type",
+            "Status",
+            "Action"
+          ],
+          "reason": "table with Course Code / Course Title / Action headers",
+          "learnedAt": "2026-04-24T20:19:48.588Z"
+        }
+      ]
+    },
+    "courseHeaderMappings": {
+      "myCourses": {
+        "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div > div:nth-of-type(2) > div > div:nth-of-type(3) > div > div > table",
+        "headers": [
+          "Course Code",
+          "Course Title",
+          "Course Type",
+          "Status",
+          "Action"
+        ],
+        "mapping": {
+          "courseCode": "Course Code",
+          "courseTitle": "Course Title",
+          "courseType": "Course Type",
+          "status": "Status",
+          "action": "Action"
+        },
+        "learnedAt": "2026-04-24T21:33:47.099Z"
+      }
+    },
+    "courses": {
+      "UQ25CA601B - Aptitude and Reasoning": [
+        {
+          "selector": "#rowWiseCourseContent_22219",
+          "text": "UQ25CA601B - Aptitude and Reasoning",
+          "reason": "course row opened successfully from My Courses table",
+          "learnedAt": "2026-04-24T20:19:55.567Z"
+        }
+      ],
+      "UQ25CA641BC1 - Network Security": [
+        {
+          "selector": "#rowWiseCourseContent_22221",
+          "text": "UQ25CA641BC1 - Network Security",
+          "reason": "course row opened successfully from My Courses table",
+          "learnedAt": "2026-04-24T20:20:15.962Z"
+        }
+      ],
+      "UQ25CA651B - Algorithms Analysis and Design": [
+        {
+          "selector": "#rowWiseCourseContent_22215",
+          "text": "UQ25CA651B - Algorithms Analysis and Design",
+          "reason": "course row opened successfully from My Courses table",
+          "learnedAt": "2026-04-24T20:20:37.093Z"
+        }
+      ],
+      "UQ25CA652B - Data Communication and Networking": [
+        {
+          "selector": "#rowWiseCourseContent_22216",
+          "text": "UQ25CA652B - Data Communication and Networking",
+          "reason": "course row opened successfully from My Courses table",
+          "learnedAt": "2026-04-24T20:20:47.561Z"
+        }
+      ],
+      "UQ25CA653B - Artificial Intelligence and Machine Learning": [
+        {
+          "selector": "#rowWiseCourseContent_22217",
+          "text": "UQ25CA653B - Artificial Intelligence and Machine Learning",
+          "reason": "course row opened successfully from My Courses table",
+          "learnedAt": "2026-04-24T20:20:58.054Z"
+        }
+      ],
+      "UQ25CA654B - Web Application Frameworks - I": [
+        {
+          "selector": "#rowWiseCourseContent_22218",
+          "text": "UQ25CA654B - Web Application Frameworks - I",
+          "reason": "course row opened successfully from My Courses table",
+          "learnedAt": "2026-04-24T20:21:19.199Z"
+        }
+      ]
+    },
+    "units": {
+      "UQ25CA601B - Aptitude and Reasoning::Course Units": [
+        {
+          "selector": "#myanchor_3",
+          "text": "Course Units",
+          "reason": "unit opened successfully",
+          "learnedAt": "2026-04-24T20:19:58.091Z"
+        }
+      ],
+      "UQ25CA601B - Aptitude and Reasoning::Unit 1": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > ul > li:nth-of-type(1) > a",
+          "text": "Unit 1",
+          "reason": "unit opened successfully",
+          "learnedAt": "2026-04-24T20:20:00.617Z"
+        }
+      ],
+      "UQ25CA601B - Aptitude and Reasoning::Unit 2": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > ul > li:nth-of-type(2) > a",
+          "text": "Unit 2",
+          "reason": "unit opened successfully",
+          "learnedAt": "2026-04-24T20:20:03.171Z"
+        }
+      ],
+      "UQ25CA601B - Aptitude and Reasoning::Unit 3": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > ul > li:nth-of-type(3) > a",
+          "text": "Unit 3",
+          "reason": "unit opened successfully",
+          "learnedAt": "2026-04-24T20:20:05.698Z"
+        }
+      ],
+      "UQ25CA601B - Aptitude and Reasoning::Unit 4": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > ul > li:nth-of-type(4) > a",
+          "text": "Unit 4",
+          "reason": "unit opened successfully",
+          "learnedAt": "2026-04-24T20:20:08.200Z"
+        }
+      ],
+      "UQ25CA641BC1 - Network Security::Course Units": [
+        {
+          "selector": "#myanchor_3",
+          "text": "Course Units",
+          "reason": "unit opened successfully",
+          "learnedAt": "2026-04-24T20:20:18.506Z"
+        }
+      ],
+      "UQ25CA641BC1 - Network Security::Unit 1: Introduction to Network Security": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > ul > li:nth-of-type(1) > a",
+          "text": "Unit 1: Introduction to Network Security",
+          "reason": "unit opened successfully",
+          "learnedAt": "2026-04-24T20:20:21.034Z"
+        }
+      ],
+      "UQ25CA641BC1 - Network Security::Unit-2: Cryptography": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > ul > li:nth-of-type(2) > a",
+          "text": "Unit-2: Cryptography",
+          "reason": "unit opened successfully",
+          "learnedAt": "2026-04-24T20:20:23.589Z"
+        }
+      ],
+      "UQ25CA641BC1 - Network Security::Unit-3: Network Security Application": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > ul > li:nth-of-type(3) > a",
+          "text": "Unit-3: Network Security Application",
+          "reason": "unit opened successfully",
+          "learnedAt": "2026-04-24T20:20:26.138Z"
+        }
+      ],
+      "UQ25CA641BC1 - Network Security::Unit 4: System Security": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > ul > li:nth-of-type(4) > a",
+          "text": "Unit 4: System Security",
+          "reason": "unit opened successfully",
+          "learnedAt": "2026-04-24T20:20:28.950Z"
+        }
+      ],
+      "UQ25CA651B - Algorithms Analysis and Design::Course Units": [
+        {
+          "selector": "#myanchor_3",
+          "text": "Course Units",
+          "reason": "unit opened successfully",
+          "learnedAt": "2026-04-24T20:20:39.642Z"
+        }
+      ],
+      "UQ25CA652B - Data Communication and Networking::Course Units": [
+        {
+          "selector": "#myanchor_3",
+          "text": "Course Units",
+          "reason": "unit opened successfully",
+          "learnedAt": "2026-04-24T20:20:50.110Z"
+        }
+      ],
+      "UQ25CA653B - Artificial Intelligence and Machine Learning::Course Units": [
+        {
+          "selector": "#myanchor_3",
+          "text": "Course Units",
+          "reason": "unit opened successfully",
+          "learnedAt": "2026-04-24T20:21:00.606Z"
+        }
+      ],
+      "UQ25CA653B - Artificial Intelligence and Machine Learning::Unit1: AI Landscape": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > ul > li:nth-of-type(1) > a",
+          "text": "Unit1: AI Landscape",
+          "reason": "unit opened successfully",
+          "learnedAt": "2026-04-24T20:21:03.159Z"
+        }
+      ],
+      "UQ25CA653B - Artificial Intelligence and Machine Learning::Unit 2: Supervised Learning": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > ul > li:nth-of-type(2) > a",
+          "text": "Unit 2: Supervised Learning",
+          "reason": "unit opened successfully",
+          "learnedAt": "2026-04-24T20:21:05.731Z"
+        }
+      ],
+      "UQ25CA653B - Artificial Intelligence and Machine Learning::Unit3: Advanced ML and Ensemble Intelligence": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > ul > li:nth-of-type(3) > a",
+          "text": "Unit3: Advanced ML and Ensemble Intelligence",
+          "reason": "unit opened successfully",
+          "learnedAt": "2026-04-24T20:21:08.281Z"
+        }
+      ],
+      "UQ25CA653B - Artificial Intelligence and Machine Learning::Unit4: Unsupervised Learning & Reinforcement Learning": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > ul > li:nth-of-type(4) > a",
+          "text": "Unit4: Unsupervised Learning & Reinforcement Learning",
+          "reason": "unit opened successfully",
+          "learnedAt": "2026-04-24T20:21:11.111Z"
+        }
+      ],
+      "UQ25CA654B - Web Application Frameworks - I::Course Units": [
+        {
+          "selector": "#myanchor_3",
+          "text": "Course Units",
+          "reason": "unit opened successfully",
+          "learnedAt": "2026-04-24T20:21:21.748Z"
+        }
+      ],
+      "UQ25CA654B - Web Application Frameworks - I::Unit 1: Website Designing": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > ul > li:nth-of-type(1) > a",
+          "text": "Unit 1: Website Designing",
+          "reason": "unit opened successfully",
+          "learnedAt": "2026-04-24T20:21:24.296Z"
+        }
+      ],
+      "UQ25CA654B - Web Application Frameworks - I::Unit 2: React Components": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > ul > li:nth-of-type(2) > a",
+          "text": "Unit 2: React Components",
+          "reason": "unit opened successfully",
+          "learnedAt": "2026-04-24T20:21:26.834Z"
+        }
+      ],
+      "UQ25CA654B - Web Application Frameworks - I::Unit 3: React State, Routing, and Bootstrap Integration": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > ul > li:nth-of-type(3) > a",
+          "text": "Unit 3: React State, Routing, and Bootstrap Integration",
+          "reason": "unit opened successfully",
+          "learnedAt": "2026-04-24T20:21:29.380Z"
+        }
+      ],
+      "UQ25CA654B - Web Application Frameworks - I::Unit 4: REST APIs, Form Validation, and MongoDB": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > ul > li:nth-of-type(4) > a",
+          "text": "Unit 4: REST APIs, Form Validation, and MongoDB",
+          "reason": "unit opened successfully",
+          "learnedAt": "2026-04-24T20:21:32.172Z"
+        }
+      ],
+      "UQ25CA651B - Algorithms Analysis and Design::Introduction, Analysis Framework and Sorting Techniques": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > ul > li:nth-of-type(1) > a",
+          "text": "Introduction, Analysis Framework and Sorting Techniques",
+          "reason": "unit opened successfully",
+          "learnedAt": "2026-04-24T21:16:46.416Z"
+        }
+      ],
+      "UQ25CA651B - Algorithms Analysis and Design::Searching and Graph Problems": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > ul > li:nth-of-type(2) > a",
+          "text": "Searching and Graph Problems",
+          "reason": "unit opened successfully",
+          "learnedAt": "2026-04-24T21:21:40.175Z"
+        }
+      ],
+      "UQ25CA652B - Data Communication and Networking::Introduction to Computer Networks and Application Layer Protocols": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > ul > li:nth-of-type(1) > a",
+          "text": "Introduction to Computer Networks and Application Layer Protocols",
+          "reason": "unit opened successfully",
+          "learnedAt": "2026-04-24T21:26:36.884Z"
+        }
+      ],
+      "UQ25CA652B - Data Communication and Networking::Video Processing and Transport Layer": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > ul > li:nth-of-type(2) > a",
+          "text": "Video Processing and Transport Layer",
+          "reason": "unit opened successfully",
+          "learnedAt": "2026-04-24T21:29:58.790Z"
+        }
+      ],
+      "UQ25CA652B - Data Communication and Networking::Network Layer Addressing and Routing": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > ul > li:nth-of-type(3) > a",
+          "text": "Network Layer Addressing and Routing",
+          "reason": "unit opened successfully",
+          "learnedAt": "2026-04-24T21:33:22.823Z"
+        }
+      ]
+    },
+    "tables": {
+      "UQ25CA601B - Aptitude and Reasoning::Course Units": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > div > div > div:nth-of-type(1) > table",
+          "headers": [
+            "Class",
+            "AV Summary",
+            "Live Videos",
+            "Slides",
+            "Notes",
+            "Assignments",
+            "QB",
+            "QA",
+            "MCQs",
+            "References"
+          ],
+          "reason": "slides table inferred from header text",
+          "learnedAt": "2026-04-24T20:19:58.942Z"
+        }
+      ],
+      "UQ25CA601B - Aptitude and Reasoning::Unit 1": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > div > div > div:nth-of-type(1) > table",
+          "headers": [
+            "Class",
+            "AV Summary",
+            "Live Videos",
+            "Slides",
+            "Notes",
+            "Assignments",
+            "QB",
+            "QA",
+            "MCQs",
+            "References"
+          ],
+          "reason": "slides table inferred from header text",
+          "learnedAt": "2026-04-24T20:20:01.479Z"
+        }
+      ],
+      "UQ25CA601B - Aptitude and Reasoning::Unit 2": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > div > div > div:nth-of-type(1) > table",
+          "headers": [
+            "Class",
+            "AV Summary",
+            "Live Videos",
+            "Slides",
+            "Notes",
+            "Assignments",
+            "QB",
+            "QA",
+            "MCQs",
+            "References"
+          ],
+          "reason": "slides table inferred from header text",
+          "learnedAt": "2026-04-24T20:20:04.011Z"
+        }
+      ],
+      "UQ25CA601B - Aptitude and Reasoning::Unit 3": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > div > div > div:nth-of-type(1) > table",
+          "headers": [
+            "Class",
+            "AV Summary",
+            "Live Videos",
+            "Slides",
+            "Notes",
+            "Assignments",
+            "QB",
+            "QA",
+            "MCQs",
+            "References"
+          ],
+          "reason": "slides table inferred from header text",
+          "learnedAt": "2026-04-24T20:20:06.530Z"
+        }
+      ],
+      "UQ25CA601B - Aptitude and Reasoning::Unit 4": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > div > div > div:nth-of-type(1) > table",
+          "headers": [
+            "Class",
+            "AV Summary",
+            "Live Videos",
+            "Slides",
+            "Notes",
+            "Assignments",
+            "QB",
+            "QA",
+            "MCQs",
+            "References"
+          ],
+          "reason": "slides table inferred from header text",
+          "learnedAt": "2026-04-24T20:20:09.030Z"
+        }
+      ],
+      "UQ25CA641BC1 - Network Security::Course Units": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > div > div > div:nth-of-type(1) > table",
+          "headers": [
+            "Class",
+            "AV Summary",
+            "Live Videos",
+            "Slides",
+            "Notes",
+            "Assignments",
+            "QB",
+            "QA",
+            "MCQs",
+            "References"
+          ],
+          "reason": "slides table inferred from header text",
+          "learnedAt": "2026-04-24T20:20:19.367Z"
+        }
+      ],
+      "UQ25CA641BC1 - Network Security::Unit 1: Introduction to Network Security": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > div > div > div:nth-of-type(1) > table",
+          "headers": [
+            "Class",
+            "AV Summary",
+            "Live Videos",
+            "Slides",
+            "Notes",
+            "Assignments",
+            "QB",
+            "QA",
+            "MCQs",
+            "References"
+          ],
+          "reason": "slides table inferred from header text",
+          "learnedAt": "2026-04-24T20:20:21.911Z"
+        }
+      ],
+      "UQ25CA641BC1 - Network Security::Unit-2: Cryptography": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > div > div > div:nth-of-type(1) > table",
+          "headers": [
+            "Class",
+            "AV Summary",
+            "Live Videos",
+            "Slides",
+            "Notes",
+            "Assignments",
+            "QB",
+            "QA",
+            "MCQs",
+            "References"
+          ],
+          "reason": "slides table inferred from header text",
+          "learnedAt": "2026-04-24T20:20:24.446Z"
+        }
+      ],
+      "UQ25CA651B - Algorithms Analysis and Design::Course Units": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > div > div > div:nth-of-type(1) > table",
+          "headers": [
+            "Class",
+            "AV Summary",
+            "Live Videos",
+            "Slides",
+            "Notes",
+            "Assignments",
+            "QB",
+            "QA",
+            "MCQs",
+            "References"
+          ],
+          "reason": "slides table inferred from header text",
+          "learnedAt": "2026-04-24T20:20:40.551Z"
+        }
+      ],
+      "UQ25CA652B - Data Communication and Networking::Course Units": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > div > div > div:nth-of-type(1) > table",
+          "headers": [
+            "Class",
+            "AV Summary",
+            "Live Videos",
+            "Slides",
+            "Notes",
+            "Assignments",
+            "QB",
+            "QA",
+            "MCQs",
+            "References"
+          ],
+          "reason": "slides table inferred from header text",
+          "learnedAt": "2026-04-24T20:20:50.987Z"
+        }
+      ],
+      "UQ25CA653B - Artificial Intelligence and Machine Learning::Course Units": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > div > div > div:nth-of-type(1) > table",
+          "headers": [
+            "Class",
+            "AV Summary",
+            "Live Videos",
+            "Slides",
+            "Notes",
+            "Assignments",
+            "QB",
+            "QA",
+            "MCQs",
+            "References"
+          ],
+          "reason": "slides table inferred from header text",
+          "learnedAt": "2026-04-24T20:21:01.482Z"
+        }
+      ],
+      "UQ25CA653B - Artificial Intelligence and Machine Learning::Unit1: AI Landscape": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > div > div > div:nth-of-type(1) > table",
+          "headers": [
+            "Class",
+            "AV Summary",
+            "Live Videos",
+            "Slides",
+            "Notes",
+            "Assignments",
+            "QB",
+            "QA",
+            "MCQs",
+            "References"
+          ],
+          "reason": "slides table inferred from header text",
+          "learnedAt": "2026-04-24T20:21:04.037Z"
+        }
+      ],
+      "UQ25CA653B - Artificial Intelligence and Machine Learning::Unit 2: Supervised Learning": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > div > div > div:nth-of-type(1) > table",
+          "headers": [
+            "Class",
+            "AV Summary",
+            "Live Videos",
+            "Slides",
+            "Notes",
+            "Assignments",
+            "QB",
+            "QA",
+            "MCQs",
+            "References"
+          ],
+          "reason": "slides table inferred from header text",
+          "learnedAt": "2026-04-24T20:21:06.601Z"
+        }
+      ],
+      "UQ25CA654B - Web Application Frameworks - I::Course Units": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > div > div > div:nth-of-type(1) > table",
+          "headers": [
+            "Class",
+            "AV Summary",
+            "Live Videos",
+            "Slides",
+            "Notes",
+            "Assignments",
+            "QB",
+            "QA",
+            "MCQs",
+            "References"
+          ],
+          "reason": "slides table inferred from header text",
+          "learnedAt": "2026-04-24T20:21:22.616Z"
+        }
+      ],
+      "UQ25CA654B - Web Application Frameworks - I::Unit 1: Website Designing": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > div > div > div:nth-of-type(1) > table",
+          "headers": [
+            "Class",
+            "AV Summary",
+            "Live Videos",
+            "Slides",
+            "Notes",
+            "Assignments",
+            "QB",
+            "QA",
+            "MCQs",
+            "References"
+          ],
+          "reason": "slides table inferred from header text",
+          "learnedAt": "2026-04-24T20:21:25.163Z"
+        }
+      ],
+      "UQ25CA654B - Web Application Frameworks - I::Unit 2: React Components": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > div > div > div:nth-of-type(1) > table",
+          "headers": [
+            "Class",
+            "AV Summary",
+            "Live Videos",
+            "Slides",
+            "Notes",
+            "Assignments",
+            "QB",
+            "QA",
+            "MCQs",
+            "References"
+          ],
+          "reason": "slides table inferred from header text",
+          "learnedAt": "2026-04-24T20:21:27.695Z"
+        }
+      ],
+      "UQ25CA651B - Algorithms Analysis and Design::Introduction, Analysis Framework and Sorting Techniques": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > div > div > div:nth-of-type(1) > table",
+          "headers": [
+            "Class",
+            "AV Summary",
+            "Live Videos",
+            "Slides",
+            "Notes",
+            "Assignments",
+            "QB",
+            "QA",
+            "MCQs",
+            "References"
+          ],
+          "reason": "slides table inferred from header text",
+          "learnedAt": "2026-04-24T21:16:47.276Z"
+        }
+      ],
+      "UQ25CA651B - Algorithms Analysis and Design::Searching and Graph Problems": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > div > div > div:nth-of-type(1) > table",
+          "headers": [
+            "Class",
+            "AV Summary",
+            "Live Videos",
+            "Slides",
+            "Notes",
+            "Assignments",
+            "QB",
+            "QA",
+            "MCQs",
+            "References"
+          ],
+          "reason": "slides table inferred from header text",
+          "learnedAt": "2026-04-24T21:21:41.023Z"
+        }
+      ],
+      "UQ25CA652B - Data Communication and Networking::Introduction to Computer Networks and Application Layer Protocols": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > div > div > div:nth-of-type(1) > table",
+          "headers": [
+            "Class",
+            "AV Summary",
+            "Live Videos",
+            "Slides",
+            "Notes",
+            "Assignments",
+            "QB",
+            "QA",
+            "MCQs",
+            "References"
+          ],
+          "reason": "slides table inferred from header text",
+          "learnedAt": "2026-04-24T21:26:37.744Z"
+        }
+      ],
+      "UQ25CA652B - Data Communication and Networking::Video Processing and Transport Layer": [
+        {
+          "selector": "div:nth-of-type(4) > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div > div > div > div:nth-of-type(1) > table",
+          "headers": [
+            "Class",
+            "AV Summary",
+            "Live Videos",
+            "Slides",
+            "Notes",
+            "Assignments",
+            "QB",
+            "QA",
+            "MCQs",
+            "References"
+          ],
+          "reason": "slides table inferred from header text",
+          "learnedAt": "2026-04-24T21:29:59.634Z"
+        }
+      ]
+    }
+  }
+}
