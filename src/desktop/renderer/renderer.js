@@ -160,7 +160,7 @@ function renderSelectionTree(catalog) {
       const note = document.createElement('p');
       note.className = 'selection-note';
       note.textContent = course.error
-        ? `Could not read units (${course.error}). The whole course will be downloaded if selected.`
+        ? `⚠ Needs manual retry — could not read units (${course.error}). Selecting it re-attempts the whole course during download.`
         : 'No units detected. The whole course will be downloaded if selected.';
       unitsWrap.appendChild(note);
     } else {

@@ -35,6 +35,7 @@ const ACTION_DELAY_MS = process.env.PESU_AGENT_DELAY_MS
   ? Number(process.env.PESU_AGENT_DELAY_MS)
   : (process.env.PWDEBUG ? 1400 : 800);
 const RETRY_COUNT = 3;
+const COURSE_DISCOVERY_RETRIES = 3;
 const UNIT_ACTIVATION_RETRIES = 3;
 const UNIT_ACTIVATION_TIMEOUT = 20_000;
 let runtime = null;
@@ -1054,9 +1055,48 @@ async function goToMyCourses(page) {
   });
 }
 
+// PESU loads the My Courses table via an AJAX "Just a moment..." overlay. After
+// several rapid navigations the DOM snapshot can land before the table's rows
+// exist. Poll until a usable courses table (or course candidates) appears.
+async function waitForCoursesTable(page) {
+  const start = Date.now();
+  while (Date.now() - start < DEFAULT_TIMEOUT) {
+    await page.waitForSelector('table', { timeout: 2_000 }).catch(() => {});
+    const observation = await observePage(page, 'wait-for-courses-table');
+    if (chooseMyCoursesTable(observation) || selectCourseCandidates(observation).length) {
+      return observation;
+    }
+    await sleep(700);
+  }
+  return null;
+}
+
 async function discoverCourses(page) {
-  const observation = await observePage(page, 'my-courses-page');
-  const coursesTable = chooseMyCoursesTable(observation);
+  let observation = await observePage(page, 'my-courses-page');
+  let coursesTable = chooseMyCoursesTable(observation);
+
+  // When the first snapshot lands during PESU's AJAX refresh (empty table, no
+  // course links), retry: wait for the table to settle, then reload on later
+  // attempts to recover from a stuck navigation — rather than failing outright.
+  for (
+    let attempt = 1;
+    !coursesTable && !selectCourseCandidates(observation).length && attempt <= COURSE_DISCOVERY_RETRIES;
+    attempt += 1
+  ) {
+    log(
+      `My Courses table not detected yet (attempt ${attempt}/${COURSE_DISCOVERY_RETRIES}); ` +
+        `${attempt > 1 ? 'reloading My Courses and ' : ''}waiting for it to finish loading.`
+    );
+    if (attempt > 1) {
+      await page
+        .goto(STUDENT_HOME_URL, { waitUntil: 'domcontentloaded', timeout: DEFAULT_TIMEOUT })
+        .catch(() => {});
+      await waitForStablePage(page);
+      await goToMyCourses(page).catch(() => {});
+    }
+    observation = (await waitForCoursesTable(page)) || (await observePage(page, 'my-courses-page-retry'));
+    coursesTable = chooseMyCoursesTable(observation);
+  }
 
   if (coursesTable) {
     const candidates = extractCourseCandidatesFromTable(coursesTable);
@@ -2519,15 +2559,43 @@ async function discoverCatalog(options = {}) {
 
     for (let courseIndex = 0; courseIndex < initialCourses.length; courseIndex += 1) {
       throwIfStopRequested('catalog discovery');
-      await returnToMyCourses(page).catch(() => {});
-      const refreshedCourses = await discoverCourses(page);
-      const courseChoice = refreshedCourses[courseIndex];
-      if (!courseChoice) {
+
+      // Identity known from the first discovery pass — used as a fallback so a
+      // failed course is still listed (and marked for manual retry) rather than
+      // silently dropped or aborting the whole run.
+      const known = initialCourses[courseIndex];
+      const knownCode = known.courseCode || '';
+      const knownTitle = known.courseTitle || '';
+      const knownLabel = known.text || `${knownCode} - ${knownTitle}`.trim() || `Course ${courseIndex + 1}`;
+
+      let courseChoice;
+      try {
+        await returnToMyCourses(page).catch(() => {});
+        const refreshedCourses = await discoverCourses(page);
+        courseChoice = refreshedCourses[courseIndex];
+      } catch (error) {
+        // Re-reading the My Courses list failed (e.g. a flaky AJAX navigation).
+        // Record this course for manual retry and keep going with the rest.
+        log(`Could not re-read the My Courses list for ${knownLabel}: ${error.message}. Marking it for manual retry and continuing.`);
+        catalog.push({ code: knownCode, title: knownTitle, label: knownLabel, units: [], needsRetry: true, error: error.message });
         continue;
       }
 
-      const code = courseChoice.courseCode || '';
-      const title = courseChoice.courseTitle || '';
+      if (!courseChoice) {
+        log(`Course index ${courseIndex + 1} (${knownLabel}) was not present after returning to My Courses; marking for manual retry.`);
+        catalog.push({
+          code: knownCode,
+          title: knownTitle,
+          label: knownLabel,
+          units: [],
+          needsRetry: true,
+          error: 'Course row not found after returning to My Courses'
+        });
+        continue;
+      }
+
+      const code = courseChoice.courseCode || knownCode;
+      const title = courseChoice.courseTitle || knownTitle;
       const fallbackLabel = courseChoice.text || `${code} - ${title}`.trim();
       getProgressStore().note(`Discovering units for ${code || fallbackLabel}`, {
         discovery: { courseIndex: courseIndex + 1, courseTotal: initialCourses.length, label: fallbackLabel }
@@ -2550,18 +2618,25 @@ async function discoverCatalog(options = {}) {
           })
         });
       } catch (error) {
-        log(`Could not read units for ${fallbackLabel}: ${error.message}`);
+        log(`Could not read units for ${fallbackLabel}: ${error.message}. Marking it for manual retry and continuing.`);
         catalog.push({
           code,
           title,
           label: fallbackLabel,
           units: [],
+          needsRetry: true,
           error: error.message
         });
+        // Best-effort: get back to a known state so the next course can proceed.
+        await returnToMyCourses(page).catch(() => {});
       }
     }
 
-    log(`Discovery complete: ${catalog.length} course(s) found`);
+    const failed = catalog.filter((entry) => entry.needsRetry);
+    log(
+      `Discovery complete: ${catalog.length} course(s) found` +
+        (failed.length ? `, ${failed.length} need manual retry (${failed.map((entry) => entry.code || entry.label).join(', ')})` : '')
+    );
     getProgressStore().note('Discovery finished', { stage: 'discovered', catalog });
     return catalog;
   } catch (error) {
@@ -2774,6 +2849,7 @@ module.exports = {
     },
     processUnit,
     discoverUnits,
+    discoverCourses,
     openUnitVerified,
     ensureUnitActive
   }

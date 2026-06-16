@@ -241,7 +241,7 @@ async function main() {
     for (const course of catalog) {
       process.stdout.write(`${course.code ? `${course.code} - ` : ''}${course.title || course.label}\n`);
       if (course.error) {
-        process.stdout.write(`  (could not read units: ${course.error})\n`);
+        process.stdout.write(`  (needs manual retry — could not read units: ${course.error})\n`);
       } else if (!course.units.length) {
         process.stdout.write('  (no units detected)\n');
       } else {

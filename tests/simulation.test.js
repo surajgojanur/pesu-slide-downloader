@@ -500,6 +500,36 @@ async function main() {
     assert.ok(sim.backToUnitsCount >= 5, `expected several Back-to-Units events, got ${sim.backToUnitsCount}`);
   });
 
+  // 5. Regression: the live-account bug where returning to "My Courses" landed on a
+  //    page mid-AJAX (the "Just a moment..." overlay), so the snapshot saw zero
+  //    course rows. discoverCourses must retry past the transient empty snapshots
+  //    instead of throwing and losing the remaining course(s).
+  await test('discoverCourses retries past transient empty My Courses snapshots (loading overlay)', async () => {
+    const { runtime } = buildTestRuntime();
+    downloader.__test.setRuntime(runtime);
+    try {
+      const state = { calls: 0 };
+      // Two empty snapshots (overlay still up), then the real 6-row table — exactly the
+      // "zero candidates on Nth return-to-My-Courses" failure from the bug report.
+      const snapshots = [
+        myCoursesEmptyObservation(),
+        myCoursesEmptyObservation(),
+        myCoursesTableObservation()
+      ];
+      const page = createMyCoursesMockPage(snapshots, state);
+      const courses = await downloader.__test.discoverCourses(page);
+      assert.strictEqual(courses.length, 6, `expected 6 courses after retry, got ${courses.length}`);
+      assert.strictEqual(
+        courses[5].courseCode,
+        'UQ25CA654B',
+        'the 6th course (Web Application Frameworks) must be recovered after the retry'
+      );
+      assert.ok(state.calls >= 3, `expected discovery to retry the snapshot at least 3 times, got ${state.calls}`);
+    } finally {
+      downloader.__test.clearRuntime();
+    }
+  });
+
   process.stdout.write(`\n${passed} passed, ${failed} failed\n`);
   if (failed > 0) {
     process.exitCode = 1;
@@ -522,6 +552,123 @@ function assertEachUnitCorrect(downloads, expectedCounts) {
       );
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// My Courses observation builders + mock page (for the discoverCourses retry test)
+// ---------------------------------------------------------------------------
+function navChoice(text) {
+  return {
+    text,
+    ariaLabel: '',
+    title: '',
+    href: '',
+    role: 'a',
+    tagName: 'a',
+    className: '',
+    selector: `nav-${text}`,
+    region: 'nav-sidebar',
+    top: 0,
+    left: 0,
+    bottom: 20
+  };
+}
+
+// What observePage sees while PESU's AJAX table is still loading: only the sidebar
+// nav, no tables, no headings (this is the exact shape captured in the bug's debug JSON).
+function myCoursesEmptyObservation() {
+  return {
+    title: 'Profile | MyCourses',
+    url: 'https://pesu.example/Academy/s/studentProfilePESU',
+    headings: [],
+    choices: [navChoice('Home'), navChoice('My Courses'), navChoice('Results'), navChoice('Time Table')],
+    tables: [],
+    dialogs: [],
+    forms: { usernameInputs: [], passwordInputs: [] }
+  };
+}
+
+// The settled page with the real My Courses table.
+function myCoursesTableObservation() {
+  const rows = [
+    ['UQ25CA601B', 'Aptitude and Reasoning'],
+    ['UQ25CA641BC1', 'Network Security'],
+    ['UQ25CA651B', 'Algorithms Analysis and Design'],
+    ['UQ25CA652B', 'Data Communication and Networking'],
+    ['UQ25CA653B', 'Artificial Intelligence and Machine Learning'],
+    ['UQ25CA654B', 'Web Application Frameworks - I']
+  ];
+  return {
+    title: 'Profile | MyCourses',
+    url: 'https://pesu.example/Academy/s/studentProfilePESU',
+    headings: [],
+    choices: [navChoice('Home')],
+    tables: [
+      {
+        selector: 'table#courses',
+        headers: ['Course Code', 'Course Title', 'Course Type', 'Status', 'Action'],
+        rowCount: rows.length,
+        rows: rows.map(([code, title], index) => ({
+          selector: `row-${index}`,
+          rowText: `${code} ${title}`,
+          cells: [
+            { text: code, selector: `c-${index}-0`, anchors: [], clickables: [] },
+            { text: title, selector: `c-${index}-1`, anchors: [], clickables: [] },
+            { text: 'CC', selector: `c-${index}-2`, anchors: [], clickables: [] },
+            { text: 'Enrolled', selector: `c-${index}-3`, anchors: [], clickables: [] },
+            { text: '', selector: `c-${index}-4`, anchors: [], clickables: [{ text: 'view', selector: `act-${index}` }] }
+          ]
+        }))
+      }
+    ],
+    dialogs: [],
+    forms: { usernameInputs: [], passwordInputs: [] }
+  };
+}
+
+function createMyCoursesMockPage(snapshots, state) {
+  const noopLocator = {
+    count: async () => 0,
+    first() {
+      return this;
+    },
+    isVisible: async () => false,
+    filter() {
+      return this;
+    },
+    click: async () => {},
+    fill: async () => {},
+    getAttribute: async () => null,
+    scrollIntoViewIfNeeded: async () => {},
+    waitFor: async () => {},
+    evaluate: async () => {},
+    textContent: async () => ''
+  };
+
+  return {
+    url: () => 'https://pesu.example/Academy/s/studentProfilePESU',
+    goto: async () => {},
+    goBack: async () => {},
+    waitForLoadState: async () => {},
+    waitForSelector: async () => {},
+    content: async () => '<html></html>',
+    screenshot: async () => {},
+    keyboard: { press: async () => {} },
+    getByRole: () => noopLocator,
+    getByLabel: () => noopLocator,
+    getByPlaceholder: () => noopLocator,
+    locator: () => noopLocator,
+    evaluate: async (fn) => {
+      const source = typeof fn === 'function' ? fn.toString() : String(fn);
+      // observePage's big DOM extraction is the only evaluate hit on this path.
+      if (source.includes('usernameInputs')) {
+        const index = Math.min(state.calls, snapshots.length - 1);
+        state.calls += 1;
+        return snapshots[index];
+      }
+      return {};
+    }
+  };
 }
 
 main();
