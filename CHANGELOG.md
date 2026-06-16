@@ -7,13 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_Nothing yet._
+
+---
+
+## [1.1.0] — 2026-06-16
+
+Adds course/unit selection, a set of UX improvements, and cross-platform fixes.
+
 ### Added
+
+**Course & unit selection**
+- Discovery phase (`discoverCatalog` in `src/core/downloader.js`) that logs in, lists every course, and opens each course just far enough to read its unit tabs — downloads nothing. Exposed on the agent as `agent.discover(...)`.
+- Normalized, serializable selection model and pure helpers in `src/core/unitTools.js` (`parseCsvList`, `parseUnitNumbers`, `buildSelectionFromCli`, `courseMatchesKey`, `isCourseSelected`, `selectedUnitsForCourse`, `isUnitSelected`), with full unit-test coverage.
+- Run loop now filters by selection: unselected courses are never opened, units are filtered per course, and progress totals reflect the selection.
+- **CLI:** `--course <list>`, `--unit <list>` (digits/roman, comma-separated), and `--list` (discover and print the catalog, then exit). `--unit` alone applies across all courses via a wildcard.
+- **Desktop:** a **Discover Courses & Units** button plus a checkbox tree (course checkbox toggles its units, with Select all / Clear); the chosen subset is passed to the run. New `pesu:discover` IPC channel; `pesu:start` now accepts a `selection` payload.
+
+**UX**
+- Friendly-log mode in the desktop UI: only milestone messages show by default, with a **Show technical details** toggle (errors always shown).
+- Progress bar showing **Course X/Y · Unit X/Y**, driven by structured `nav` progress events from the engine.
+- Friendly, early CLI credential validation pointing to `.env` / flags.
+- Pre-flight writable-output-directory checks (CLI and desktop).
+- `--version` / `-v` CLI flag; `engines: { node: ">=18" }` in `package.json`.
+- Postinstall now prints a download size/time notice and fails gracefully (warns instead of aborting `npm install`) when run as a `postinstall` hook.
+- Deprecation banner when running the legacy `npm run pesu` prototype.
+
+**Docs**
 - `DOCUMENTATION.md` — deep technical reference (architecture, module breakdown, data flow, IPC contract, known issues).
 - `.env.example` — documented template for all environment variables.
 
 ### Changed
-- Rewrote `README.md` with full setup, env table, project tree, and usage docs.
-- Filled in `package.json` `keywords` and `author` metadata.
+- `--no-sandbox` is now applied conditionally (Linux only) via `app.commandLine.appendSwitch` instead of being hard-coded in the `desktop` npm script.
+- Windows-incompatible `PWDEBUG=1` npm scripts now use `cross-env`.
+- "Browser not installed" error now tells the user to run `npm run playwright:install`.
+- Desktop password field is cleared on failure as well as on success.
+- Rewrote `README.md` with full setup, env table, project tree, selection workflow, and usage docs; filled in `package.json` `keywords` and `author` metadata.
+
+### Fixed
+- Bare roman numerals (`--unit "I,II,III"`) are now parsed correctly.
 
 ---
 
@@ -88,5 +120,6 @@ download PESU Academy slide PDFs into a course/unit-organised local archive.
   course/unit/slide discovery).
 
 [Unreleased]: #unreleased
+[1.1.0]: #110--2026-06-16
 [1.0.0]: #100--2026-04-26
 [0.1.0]: #010--2026-04-25

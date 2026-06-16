@@ -1,6 +1,6 @@
 {
   "name": "pesu-downloader",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Desktop and CLI downloader for PESU Academy slide PDFs powered by Playwright.",
   "main": "src/desktop/main.js",
   "scripts": {

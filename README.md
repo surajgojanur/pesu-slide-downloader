@@ -44,6 +44,7 @@ catalogue), see **[DOCUMENTATION.md](./DOCUMENTATION.md)**.
 
 - **One-click automated login** to PESU Academy using credentials supplied at runtime.
 - **Automatic course discovery** from the *My Courses* table.
+- **Course & unit selection** — a discovery phase lists every course and its units, then you pick exactly what to download: checkboxes in the desktop app, or `--course` / `--unit` filters on the CLI. Skip it to download everything.
 - **Dynamic, adaptive unit detection** — reads the live DOM instead of relying on hard-coded selectors, so it tolerates UI variations (`Unit 1`, `Unit-2`, `UNIT III`, `Module 4`, …).
 - **Slide-to-PDF extraction** across multiple viewer styles (direct links, `loadIframe(...)` handlers, glyphicon "eye" viewers, `blob:` PDFs, popups, and Playwright download events).
 - **Verified unit activation** — proves the correct unit is loaded (by active tab, heading, and a content fingerprint) before saving any PDF, guarding against the SPA "wrong unit" bug.
@@ -113,22 +114,42 @@ Then, in the window:
 
 1. Enter your PESU **username** and **password** (kept in memory for this run only).
 2. Click **Browse** to choose a download folder (defaults to `~/Downloads/PESU_Academy`).
-3. Pick an **Automation speed** (Fast / Normal / Slow / Safe), or `Custom delay…` for an exact value in ms.
-4. Click **Start Download**. A real Chromium window opens and the run begins.
-5. Watch the **Live Log** and the Downloaded / Skipped / Failed counters.
-6. Use **Stop** to cancel cleanly, or **Open Folder** to view results.
+3. *(Optional)* Click **Discover Courses & Units** to list everything in your account, then use the checkbox tree to pick exactly what to download (see below). Skip this step to download everything.
+4. Pick an **Automation speed** (Fast / Normal / Slow / Safe), or `Custom delay…` for an exact value in ms.
+5. Click **Start Download**. A real Chromium window opens and the run begins.
+6. Watch the **Live Log** (milestones only by default — tick **Show technical details** for the full stream) and the progress bar with **Course X/Y · Unit X/Y**, plus the Downloaded / Skipped / Failed counters.
+7. Use **Stop** to cancel cleanly, or **Open Folder** to view results.
+
+#### Choosing courses & units (desktop)
+
+Clicking **Discover Courses & Units** opens Chromium, logs in, and lists every
+course with its units as a checkbox tree:
+
+- Every course and unit starts **checked** (so doing nothing = download everything).
+- Unticking a **course** checkbox unticks all of its units; tick it again to re-select them.
+- Use **Select all** / **Clear** to toggle the whole tree at once.
+- Courses whose units can't be read are still listed; selecting one downloads the whole course.
+- Click **Start Download** to process only what's ticked. If you discovered and then cleared everything, the app asks you to pick at least one item.
+
+> Discovery opens each course once to read its unit tabs, so on a multi-course
+> account it takes a little time before the picker appears. Login is reused for
+> the download phase, so you won't be asked to sign in again.
 
 ### CLI
 
 The CLI reads credentials from `.env` (or flags) and drives the same core engine.
 
 ```bash
-npm run cli                       # uses PESU_USERNAME / PESU_PASSWORD from .env
-npm run cli -- --headless         # run Chromium headless
-npm run cli -- --speed safe       # slowest, most reliable preset
-npm run cli -- --delay-ms 1800    # custom inter-action delay (overrides --speed)
-npm run cli -- --output ~/slides  # custom output directory
-npm run cli -- --help             # full flag reference
+npm run cli                                   # uses PESU_USERNAME / PESU_PASSWORD from .env
+npm run cli -- --headless                     # run Chromium headless
+npm run cli -- --speed safe                   # slowest, most reliable preset
+npm run cli -- --delay-ms 1800                # custom inter-action delay (overrides --speed)
+npm run cli -- --output ~/slides              # custom output directory
+npm run cli -- --list                         # discover & print all courses + units, then exit
+npm run cli -- --course "UQ25CA651B" --unit "1,2"   # only units 1 & 2 of one course
+npm run cli -- --course "Algorithms,Network Security"  # only these courses (all units)
+npm run cli -- --unit "1,2,3"                 # units 1-3 across every course
+npm run cli -- --help                         # full flag reference
 ```
 
 | Flag | Description |
@@ -139,7 +160,21 @@ npm run cli -- --help             # full flag reference
 | `--headless` | Run Chromium without a visible window |
 | `--speed <fast\|normal\|slow\|safe>` | Automation speed preset |
 | `--delay-ms <0-60000>` | Custom action delay in ms (overrides `--speed`) |
+| `--course <list>` | Only download these courses — codes or names, comma-separated (e.g. `"UQ25CA651B,Algorithms"`). Matches by course code, exact label, or substring. |
+| `--unit <list>` | Only download these unit numbers, comma-separated (e.g. `"1,2,3"`; roman numerals also accepted). Applies within the selected courses, or across all courses if `--course` is omitted. |
+| `--list` | Run discovery only: print every course and its units, then exit without downloading. |
+| `--version`, `-v` | Print the version and exit |
 | `--help`, `-h` | Show help |
+
+**How `--course` / `--unit` combine:**
+
+- `--course X --unit 1,2` → units 1 & 2 of course X only.
+- `--course X` (no `--unit`) → all units of course X.
+- `--unit 1,2` (no `--course`) → units 1 & 2 of **every** course.
+- neither → everything (default).
+
+Run `--list` first to see the exact course codes and unit numbers available on
+your account.
 
 A legacy wrapper, `npm run pesu:agent`, runs the same core with fixed defaults
 and is kept for backwards compatibility.
@@ -203,6 +238,13 @@ unit content slowly through AJAX.
 | custom | any value 0–60000 ms (`--delay-ms` or "Custom delay…") |
 
 Invalid values produce a clear error and a non-zero exit code.
+
+> **Discovery time:** the optional discovery phase (desktop **Discover Courses &
+> Units** button or CLI `--list`) opens each course once to read its unit tabs, so
+> it adds roughly one course-open per course before results appear — slower speeds
+> multiply this. It is independent of the download phase and only runs when you ask
+> for it. Discovery reuses the same browser profile, so the subsequent download
+> won't prompt for login again.
 
 ---
 
@@ -339,8 +381,8 @@ HTML + JSON) go to `debug/`.
 
 ## Roadmap
 
-- **Course/Unit selection UI** — checkboxes to download only chosen courses/units.
-- **Better progress UX** — true progress bar, per-download retry actions.
+- **Faster discovery** — cache the catalog and avoid re-opening every course.
+- **Per-download retry actions** in the desktop UI.
 - **Performance** — controlled parallel downloads, fewer redundant reloads.
 - **Packaging** — signed Windows `.exe` and macOS `.dmg`, icons and branding.
 - **Reliability** — broader retry/recovery, more viewer-variant coverage.

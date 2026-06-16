@@ -18,13 +18,14 @@ user-facing setup and usage, see [README.md](./README.md).
   - [3.10 `scripts/`](#310-scripts)
 - [4. Data Flow](#4-data-flow)
 - [5. The "Wrong Unit" Problem & Verified Activation](#5-the-wrong-unit-problem--verified-activation)
-- [6. PDF Source Detection Strategies](#6-pdf-source-detection-strategies)
-- [7. Persistent State & File Layout](#7-persistent-state--file-layout)
-- [8. IPC Contract (Desktop)](#8-ipc-contract-desktop)
-- [9. Configuration Reference](#9-configuration-reference)
-- [10. Testing Strategy](#10-testing-strategy)
-- [11. Packaging](#11-packaging)
-- [12. Known Issues & TODOs](#12-known-issues--todos)
+- [6. Course & Unit Selection](#6-course--unit-selection)
+- [7. PDF Source Detection Strategies](#7-pdf-source-detection-strategies)
+- [8. Persistent State & File Layout](#8-persistent-state--file-layout)
+- [9. IPC Contract (Desktop)](#9-ipc-contract-desktop)
+- [10. Configuration Reference](#10-configuration-reference)
+- [11. Testing Strategy](#11-testing-strategy)
+- [12. Packaging](#12-packaging)
+- [13. Known Issues & TODOs](#13-known-issues--todos)
 
 ---
 
@@ -145,7 +146,7 @@ The heart of the system (~2600 lines). Responsibilities grouped by concern:
 - `inferClassInfo(row, headers, slideIndex, rowIndex)` — derive class number,
   title, the slide cell, and whether the row `hasSlides`.
 
-**PDF acquisition** (see §6)
+**PDF acquisition** (see §7)
 - `collectArtifactHints`, `detectImmediatePdfSources` — scan iframes/embeds/objects,
   dialog/page links, and `onclick="loadIframe('…downloadslidecoursedoc…')"` handlers.
 - `detectGlyphiconEyeAnchors`, `savePdfFromViewCandidate`, `handleSlideDetailPage`,
@@ -203,6 +204,7 @@ Pure, dependency-light helpers (only Node `crypto`), exhaustively unit-tested:
 - `fingerprintsDiffer(prev, cur)` — hash comparison.
 - `parseSpeedOption({speed, delayMs})` → `{actionDelayMs, label, source}`; `delayMs` (0–60000) overrides `speed`; invalid input throws.
 - `sourceSetFingerprint(sources)` / `isDuplicateSourceSet(prevKeys, curKeys)` — detect two units resolving to identical PDF URL sets.
+- **Selection helpers** — `parseCsvList`, `parseUnitNumbers`, `buildSelectionFromCli`, `courseMatchesKey`, `isCourseSelected`, `selectedUnitsForCourse`, `isUnitSelected`. See §6.1.
 
 ### 3.4 `src/core/progressStore.js`
 
@@ -233,15 +235,19 @@ Small shared helpers: `ensureDir`, `now` (ISO timestamp),
 
 ### 3.7 `src/core/pesuAgent.js`
 
-`createPESUAgent(defaults)` → `{ requestStop, run(overrides) }`. A thin factory
-that merges constructor defaults with per-run overrides and calls
-`runPESUDownloader`. This is the only core surface the front-ends touch.
+`createPESUAgent(defaults)` → `{ requestStop, run(overrides), discover(overrides) }`.
+A thin factory that merges constructor defaults with per-call overrides and calls
+`runPESUDownloader` (`run`) or `discoverCatalog` (`discover`, §6.2). This is the
+only core surface the front-ends touch.
 
 ### 3.8 `src/cli/index.js`
 
-CLI entrypoint. Loads `.env` via dotenv, parses flags (`parseArgs`), resolves the
-speed via `parseSpeedOption`, builds an agent with `workspaceDir = repo root`, and
-runs it, printing a final `downloaded/skipped/failed` summary. Exits non-zero on
+CLI entrypoint. Loads `.env` via dotenv, parses flags (`parseArgs`), validates
+credentials and a writable output dir, resolves the speed via `parseSpeedOption`,
+and builds an agent with `workspaceDir = repo root`. `--list` prints the discovery
+catalog and exits; otherwise it builds a selection from `--course`/`--unit` and
+runs, printing a final `downloaded/skipped/failed` summary. Also supports
+`--version`. Exits non-zero on
 invalid speed or runtime error.
 
 ### 3.9 `src/desktop/`
@@ -341,7 +347,90 @@ condition and proves the guard holds, including the adversarial sticky-tab case.
 
 ---
 
-## 6. PDF Source Detection Strategies
+## 6. Course & Unit Selection
+
+By default the downloader processes the entire account. A discovery phase plus a
+normalized selection model let the user restrict the run to specific courses and
+units — from the desktop checkbox tree or CLI flags.
+
+### 6.1 The selection model (`src/core/unitTools.js`)
+
+A **selection** is a small, JSON-serializable value (so it crosses the Electron
+IPC boundary and the CLI/agent layers unchanged):
+
+```js
+null                                   // download everything (back-compat)
+{ courses: [ { key, units } ] }        // restrict to matching courses / units
+```
+
+- `key` — a course code, label, or substring to match a discovered course
+  against. The literal `'*'` matches **every** course (used by `--unit` with no
+  `--course`).
+- `units` — an array of unit numbers for that course. `null` or `[]` means **all
+  units** of the matched course.
+
+Pure helpers (all unit-tested in `tests/unit.test.js`):
+
+| Function | Purpose |
+| --- | --- |
+| `parseCsvList(value)` | Split `"a, b ; c"` / arrays into trimmed tokens. |
+| `parseUnitNumbers(value)` | Parse `"1,2"`, `"Unit 3"`, and bare roman (`"III"`) into de-duplicated numbers. |
+| `buildSelectionFromCli(courseValue, unitValue)` | Build the selection object from `--course` / `--unit`. Returns `null` when neither is given; uses the `'*'` key when only units are given. |
+| `courseMatchesKey(course, key)` | Match a course by code, exact label, or substring (case-insensitive); `'*'` matches all. |
+| `isCourseSelected(selection, course)` | True when `course` matches any entry (or selection is empty/null). |
+| `selectedUnitsForCourse(selection, course)` | `Set<number>` of selected unit numbers, or `null` (= all). |
+| `isUnitSelected(selection, course, unitNumber)` | Convenience predicate over the above. |
+
+### 6.2 Discovery phase (`discoverCatalog` in `src/core/downloader.js`)
+
+`discoverCatalog(options)` is a download-free variant of the main run. It builds
+the same `runtime` singleton, launches Chromium, logs in, lists courses, and
+opens **each course once** to read its unit tabs, returning:
+
+```js
+[
+  { code, title, label, units: [ { number, text, dirName } ] },
+  // a course whose units can't be read is still listed with units: [] and an `error`
+]
+```
+
+It is exposed on the agent as `agent.discover(...)` and used by the desktop
+**Discover Courses & Units** button and the CLI `--list` flag. Because it opens
+every course, it costs roughly one course-open per course; it reuses the
+persistent Chromium profile so the later download phase doesn't re-prompt login.
+
+### 6.3 Filtering in the run loop (`runPESUDownloader`)
+
+`runPESUDownloader` reads `options.selection` and applies it in two places:
+
+1. **Course level (before opening):** it precomputes
+   `plannedCourseIndices = initialCourses.filter(isCourseSelected)`, so
+   **unselected courses are never opened** — both an efficiency win and the reason
+   the progress-bar `courseTotal` reflects the selected count, not the raw total.
+   Selection is re-checked after each `discoverCourses` refresh in case the
+   discovery order shifts between passes.
+2. **Unit level (after discovery):** the per-course `unitPlan` is filtered with
+   `isUnitSelected(selection, courseChoice, unitNumber)`. A course whose units are
+   all filtered out is skipped with a log line.
+
+A `null`/empty selection short-circuits both predicates to "include everything",
+preserving the original behaviour.
+
+### 6.4 CLI and desktop entry points
+
+- **CLI** (`src/cli/index.js`): `--list` calls `agent.discover(...)` and prints the
+  catalog, then exits. Otherwise `buildSelectionFromCli(args.course, args.unit)`
+  produces the selection passed to `agent.run({ ..., selection })`.
+- **Desktop** (`renderer.js`): **Discover** calls `discoverCourses` over IPC and
+  renders a checkbox tree (`renderSelectionTree`); **Start** reads the tree with
+  `buildSelectionFromTree()` — a fully-checked course collapses to `units: null`
+  (all), a partial course lists explicit numbers, an unchecked course is omitted.
+  If the user discovered and then cleared everything, Start refuses and asks them
+  to pick at least one item. No discovery → `null` selection → download everything.
+
+---
+
+## 7. PDF Source Detection Strategies
 
 PESU exposes slide PDFs in several ways; the downloader tries them in order:
 
@@ -364,7 +453,7 @@ when a single class yields multiple assets. Existing files short-circuit to
 
 ---
 
-## 7. Persistent State & File Layout
+## 8. Persistent State & File Layout
 
 | Path | Purpose | Lifecycle |
 | --- | --- | --- |
@@ -388,7 +477,7 @@ The CLI and scripts use the repo root.
 
 ---
 
-## 8. IPC Contract (Desktop)
+## 9. IPC Contract (Desktop)
 
 Renderer → Main (`ipcRenderer.invoke`, exposed as `window.pesuDesktop`):
 
@@ -397,29 +486,41 @@ Renderer → Main (`ipcRenderer.invoke`, exposed as `window.pesuDesktop`):
 | `pesu:get-default-output-dir` | — | default output path string |
 | `pesu:choose-output-dir` | — | chosen dir or `null` |
 | `pesu:open-output-dir` | `outputDir` | `{ok}` or `{ok:false, error}` |
-| `pesu:start` | `{username, password, outputDir, speed\|delayMs}` | final `counts` (throws on error) |
+| `pesu:discover` | `{username, password}` | the course/unit catalog array (throws on error) |
+| `pesu:start` | `{username, password, outputDir, speed\|delayMs, selection?}` | final `counts` (throws on error) |
 | `pesu:stop` | — | `{ok}` or `{ok:false, error}` |
+
+`pesu:discover` runs the discovery phase (§6.2) and shares the same `activeRun`
+guard as `pesu:start`, so a discovery and a download can't run at once; it streams
+the same `pesu:log` / `pesu:progress` events. `selection` on `pesu:start` is the
+normalized object from §6.1 (or `null` for everything).
 
 Main → Renderer (`webContents.send`, subscribed via preload):
 
 | Channel | Payload |
 | --- | --- |
 | `pesu:log` | `{level, line, message, timestamp}` |
-| `pesu:progress` | `{counts, message?, item?, status?, outputDir}` |
-| `pesu:run-state` | `{running, outputDir, success?, counts?, error?}` |
+| `pesu:progress` | `{counts, message?, item?, status?, nav?, outputDir}` |
+| `pesu:run-state` | `{running, phase?, outputDir?, success?, counts?, error?}` |
+
+`nav` on `pesu:progress` carries `{courseIndex, courseTotal, courseLabel,
+unitIndex?, unitTotal?, unitLabel?}` for the progress bar. `pesu:run-state` with
+`phase: 'discovery'` signals discovery start/finish (no `counts`); the renderer
+branches on `phase` so it doesn't read download counts during discovery.
 
 Only one run may be active (`activeRun` guard). `pesu:stop` calls
 `agent.requestStop()`.
 
 ---
 
-## 9. Configuration Reference
+## 10. Configuration Reference
 
 `runPESUDownloader(options)` / `createPESUAgent(defaults).run(overrides)` accept:
 
 | Option | Meaning |
 | --- | --- |
 | `username`, `password` | **Required.** PESU credentials. |
+| `selection` | Course/unit filter (§6.1); `null` = everything. |
 | `outputDir` | Download root (default `downloads/PESU_Academy`). |
 | `workspaceDir` | Base for `logs/`, `memory/`, `debug/`, `.chromium-profile/`, `.tmp-downloads/`. |
 | `headless` | Launch Chromium headless (default `false`). |
@@ -433,7 +534,7 @@ Environment variables: see the [README env table](./README.md#environment-variab
 
 ---
 
-## 10. Testing Strategy
+## 11. Testing Strategy
 
 `npm test` runs two browser-free suites:
 
@@ -455,7 +556,7 @@ checked in; run `npm test` locally.
 
 ---
 
-## 11. Packaging
+## 12. Packaging
 
 electron-builder config lives in `package.json` under `build`:
 
@@ -470,12 +571,13 @@ validation (and macOS signing).
 
 ---
 
-## 12. Known Issues & TODOs
+## 13. Known Issues & TODOs
 
 Derived from code comments, `appendNote`/log history, and behaviour:
 
-- **No course/unit selection.** Every run processes the entire account; there's no
-  way to target specific courses or units yet (top item on the roadmap).
+- **Discovery cost.** Course/unit selection exists (§6), but the discovery phase
+  opens every course once to read its units, so the picker is slow to appear on
+  large accounts. Caching the catalog is the next improvement.
 - **UI-structure coupling.** Detection depends on PESU's current DOM; viewer or
   table changes can break it. Mitigated by adaptive observation but not eliminated.
 - **Video-only / non-standard units** log "No slide table could be inferred" and
