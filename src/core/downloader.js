@@ -699,16 +699,37 @@ function detectUnitChoices(observation) {
         .filter((text) => IGNORED_TOP_LEVEL_COURSE_TABS.has(text.toLowerCase()))
     : [];
 
+  const nonIgnored = (row) =>
+    row.choices.filter((choice) => !IGNORED_TOP_LEVEL_COURSE_TABS.has(choice.normalized));
+
   let unitRow = null;
   if (topLevelRowIndex >= 0) {
     for (let index = topLevelRowIndex + 1; index < rows.length; index += 1) {
-      const candidateChoices = rows[index].choices.filter(
-        (choice) => !IGNORED_TOP_LEVEL_COURSE_TABS.has(choice.normalized)
-      );
+      const candidateChoices = nonIgnored(rows[index]);
       if (candidateChoices.length >= 2) {
+        // Seed row found. The unit tab strip is a Bootstrap `.nav-tabs` that
+        // FLEX-WRAPS: when labels are long, later tabs (e.g. a 4th unit) wrap onto
+        // a second visual line with a different `top`, so they land in a separate
+        // row here. Merge in following rows that belong to the same strip — same
+        // region and visually contiguous — so the last unit tab isn't dropped.
+        const merged = [...candidateChoices];
+        const seedRegion = candidateChoices[0].region;
+        let prevTop = rows[index].top;
+        for (let next = index + 1; next < rows.length; next += 1) {
+          const nextChoices = nonIgnored(rows[next]);
+          const sameStrip =
+            nextChoices.length > 0 &&
+            rows[next].top - prevTop <= 60 &&
+            nextChoices.every((choice) => choice.region === seedRegion);
+          if (!sameStrip) {
+            break;
+          }
+          merged.push(...nextChoices);
+          prevTop = rows[next].top;
+        }
         unitRow = {
           top: rows[index].top,
-          choices: candidateChoices
+          choices: merged
         };
         break;
       }

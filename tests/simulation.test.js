@@ -530,6 +530,53 @@ async function main() {
     }
   });
 
+  // 6. Regression: the unit tab strip is a Bootstrap `.nav-tabs` that flex-wraps when
+  //    labels are long, pushing the last unit tab onto a second visual line (a
+  //    different `top`). discoverUnits must still capture all 4 tabs, not just the
+  //    first line. Uses the real labels from the live account (4 units each).
+  await test('discoverUnits captures all 4 unit tabs when the strip wraps (UQ25CA654B, keyword labels)', async () => {
+    const { runtime } = buildTestRuntime();
+    downloader.__test.setRuntime(runtime);
+    try {
+      const labels = [
+        'Unit 1: Website Designing',
+        'Unit 2: React Components',
+        'Unit 3: React State, Routing, and Bootstrap Integration',
+        'Unit 4: REST APIs, Form Validation, and MongoDB'
+      ];
+      const page = createObservationMockPage(unitTabsObservation(labels, { wrapFrom: 3 }));
+      const units = await downloader.__test.discoverUnits(page, 'UQ25CA654B - Web Application Frameworks - I');
+      assert.strictEqual(units.length, 4, `expected 4 units, got ${units.length}: ${units.map((u) => u.text).join(' | ')}`);
+      assert.deepStrictEqual(units.map((u) => u.number), [1, 2, 3, 4]);
+    } finally {
+      downloader.__test.clearRuntime();
+    }
+  });
+
+  // 7. Same wrap bug, but for a course whose tabs have NO "Unit" keyword (so the
+  //    keyword fallback can't save it) — the geometric merge must still find all 4.
+  await test('discoverUnits captures all 4 wrapped tabs without a "Unit" keyword (UQ25CA651B)', async () => {
+    const { runtime } = buildTestRuntime();
+    downloader.__test.setRuntime(runtime);
+    try {
+      const labels = [
+        'Introduction, Analysis Framework and Sorting Techniques',
+        'Searching and Graph Problems',
+        'Data Compression Algorithms and Complexity Classes',
+        'Combinatorial Optimization'
+      ];
+      const page = createObservationMockPage(unitTabsObservation(labels, { wrapFrom: 3 }));
+      const units = await downloader.__test.discoverUnits(page, 'UQ25CA651B - Algorithms Analysis and Design');
+      assert.strictEqual(units.length, 4, `expected 4 units, got ${units.length}: ${units.map((u) => u.text).join(' | ')}`);
+      assert.ok(
+        units.some((u) => /Combinatorial Optimization/i.test(u.text)),
+        'the 4th unit (Combinatorial Optimization) must be present'
+      );
+    } finally {
+      downloader.__test.clearRuntime();
+    }
+  });
+
   process.stdout.write(`\n${passed} passed, ${failed} failed\n`);
   if (failed > 0) {
     process.exitCode = 1;
@@ -623,6 +670,100 @@ function myCoursesTableObservation() {
     ],
     dialogs: [],
     forms: { usernameInputs: [], passwordInputs: [] }
+  };
+}
+
+// Build a units page observation. The unit tab strip flex-wraps, so tabs at index
+// >= wrapFrom are placed on a second visual line (a larger `top`), reproducing the
+// "last tab on a wrapped line" layout seen on the live account.
+function unitTabsObservation(unitLabels, { wrapFrom = null } = {}) {
+  const region = 'course-content-panel';
+  // Ignored top-level course-category tabs (the row detectUnitChoices anchors on).
+  const ignored = ['Course Units', 'Introduction', 'Objectives', 'Outcomes'];
+  const choices = ignored.map((text, i) => ({
+    text,
+    ariaLabel: '',
+    title: '',
+    href: '',
+    role: 'a',
+    tagName: 'a',
+    className: '',
+    selector: `top-tab-${i}`,
+    region,
+    top: 100,
+    left: i * 120,
+    bottom: 120
+  }));
+
+  unitLabels.forEach((text, i) => {
+    const wrapped = wrapFrom != null && i >= wrapFrom;
+    choices.push({
+      text,
+      ariaLabel: '',
+      title: text,
+      href: '',
+      role: 'a',
+      tagName: 'a',
+      className: '',
+      selector: `unit-tab-${i}`,
+      region,
+      top: wrapped ? 180 : 140,
+      left: i * 200,
+      bottom: wrapped ? 200 : 160
+    });
+  });
+
+  return {
+    title: 'Course',
+    url: 'https://pesu.example/Academy/s/studentProfilePESU',
+    headings: [],
+    choices,
+    tables: [],
+    dialogs: [],
+    forms: { usernameInputs: [], passwordInputs: [] }
+  };
+}
+
+// Mock page whose observePage extraction always returns a fixed observation.
+function createObservationMockPage(observation) {
+  const noopLocator = {
+    count: async () => 0,
+    first() {
+      return this;
+    },
+    isVisible: async () => false,
+    filter() {
+      return this;
+    },
+    click: async () => {},
+    fill: async () => {},
+    getAttribute: async () => null,
+    scrollIntoViewIfNeeded: async () => {},
+    waitFor: async () => {},
+    evaluate: async () => {},
+    textContent: async () => ''
+  };
+
+  return {
+    url: () => observation.url,
+    goto: async () => {},
+    goBack: async () => {},
+    waitForLoadState: async () => {},
+    waitForSelector: async () => {},
+    content: async () => '<html></html>',
+    screenshot: async () => {},
+    keyboard: { press: async () => {} },
+    getByRole: () => noopLocator,
+    getByLabel: () => noopLocator,
+    getByPlaceholder: () => noopLocator,
+    locator: () => noopLocator,
+    evaluate: async (fn) => {
+      const source = typeof fn === 'function' ? fn.toString() : String(fn);
+      if (source.includes('usernameInputs')) {
+        return observation;
+      }
+      return {};
+    }
   };
 }
 
