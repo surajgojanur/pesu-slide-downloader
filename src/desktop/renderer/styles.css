@@ -157,7 +157,8 @@ body {
   font-weight: 700;
 }
 
-input {
+input,
+select {
   width: 100%;
   border: 1px solid rgba(31, 39, 34, 0.12);
   border-radius: 16px;
@@ -167,7 +168,8 @@ input {
   padding: 14px 16px;
 }
 
-input:focus {
+input:focus,
+select:focus {
   border-color: rgba(15, 108, 99, 0.45);
   box-shadow: 0 0 0 4px rgba(15, 108, 99, 0.08);
   outline: none;

@@ -1,5 +1,7 @@
 const elements = {
   chooseFolderButton: document.getElementById('chooseFolderButton'),
+  customDelayField: document.getElementById('customDelayField'),
+  customDelayInput: document.getElementById('customDelayInput'),
   downloadedCount: document.getElementById('downloadedCount'),
   failedCount: document.getElementById('failedCount'),
   logList: document.getElementById('logList'),
@@ -8,9 +10,11 @@ const elements = {
   passwordInput: document.getElementById('passwordInput'),
   progressMessage: document.getElementById('progressMessage'),
   skippedCount: document.getElementById('skippedCount'),
+  speedSelect: document.getElementById('speedSelect'),
   startButton: document.getElementById('startButton'),
   statusBadge: document.getElementById('statusBadge'),
   statusText: document.getElementById('statusText'),
+  stopButton: document.getElementById('stopButton'),
   usernameInput: document.getElementById('usernameInput'),
 };
 
@@ -53,7 +57,27 @@ function syncButtons() {
   elements.startButton.disabled = state.running;
   elements.chooseFolderButton.disabled = state.running;
   elements.openFolderButton.disabled = !state.outputDir;
+  elements.stopButton.disabled = !state.running;
+  elements.speedSelect.disabled = state.running;
+  elements.customDelayInput.disabled = state.running;
 }
+
+function isCustomSpeed() {
+  return elements.speedSelect.value === 'custom';
+}
+
+function syncCustomDelayVisibility() {
+  elements.customDelayField.hidden = !isCustomSpeed();
+}
+
+function resolveSpeedSelection() {
+  if (isCustomSpeed()) {
+    return { delayMs: elements.customDelayInput.value };
+  }
+  return { speed: elements.speedSelect.value };
+}
+
+elements.speedSelect.addEventListener('change', syncCustomDelayVisibility);
 
 async function hydrateDefaults() {
   const defaultOutputDir = await window.pesuDesktop.getDefaultOutputDir();
@@ -99,6 +123,8 @@ elements.startButton.addEventListener('click', async () => {
     return;
   }
 
+  const speedSelection = resolveSpeedSelection();
+
   setCounts({ downloaded: 0, failed: 0, skipped: 0 });
   elements.logList.innerHTML = '';
   elements.progressMessage.textContent = 'Launching Playwright and opening PESU Academy...';
@@ -106,12 +132,22 @@ elements.startButton.addEventListener('click', async () => {
 
   try {
     await window.pesuDesktop.startDownload({
+      ...speedSelection,
       outputDir,
       password,
       username,
     });
   } catch (error) {
     setStatus('Run failed', error.message || String(error));
+  }
+});
+
+elements.stopButton.addEventListener('click', async () => {
+  elements.stopButton.disabled = true;
+  appendLog('Stop requested. Waiting for the current step to finish...');
+  const result = await window.pesuDesktop.stopDownload();
+  if (!result || !result.ok) {
+    setStatus('Stop failed', (result && result.error) || 'Could not stop the run.');
   }
 });
 
@@ -163,6 +199,7 @@ window.pesuDesktop.onRunState((event) => {
   }
 });
 
+syncCustomDelayVisibility();
 hydrateDefaults().catch((error) => {
   setStatus('Startup failed', error.message || String(error));
 });

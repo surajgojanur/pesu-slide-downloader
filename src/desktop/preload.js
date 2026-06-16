@@ -16,4 +16,5 @@ contextBridge.exposeInMainWorld('pesuDesktop', {
   onRunState: (callback) => subscribe('pesu:run-state', callback),
   openOutputDir: (outputDir) => ipcRenderer.invoke('pesu:open-output-dir', outputDir),
   startDownload: (payload) => ipcRenderer.invoke('pesu:start', payload),
+  stopDownload: () => ipcRenderer.invoke('pesu:stop'),
 });

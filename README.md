@@ -140,15 +140,50 @@ The Playwright browser dependency is required. The project installs and uses a m
 1. Open the desktop application.
 2. Enter PESU username and password.
 3. Choose the download folder.
-4. Click `Start Download`.
-5. Monitor logs, counts, and progress in the UI.
-6. Open the output folder when the run completes.
+4. Choose an **Automation speed** (Fast / Normal / Slow / Safe), or pick `Custom delay…` to enter a precise delay in milliseconds.
+5. Click `Start Download`.
+6. Monitor logs, counts, and progress in the UI. Use `Stop` to cancel a running download cleanly.
+7. Open the output folder when the run completes.
+
+The selected automation speed is printed in the live log at the start of each run.
 
 For developer workflows, the CLI and legacy wrapper remain available:
 
 ```bash
 npm run cli -- --headless
+npm run cli -- --speed safe
+npm run cli -- --delay-ms 1800
 npm run pesu:agent
+```
+
+### Automation speed
+
+Both the desktop UI and the CLI expose how long the downloader pauses between
+browser actions. Slower speeds are more reliable on flaky connections or when
+PESU Academy updates content slowly through AJAX.
+
+| Preset   | Action delay |
+| -------- | ------------ |
+| `fast`   | 250 ms       |
+| `normal` | 800 ms (default) |
+| `slow`   | 1400 ms      |
+| `safe`   | 2200 ms      |
+
+CLI flags:
+
+- `--speed <fast|normal|slow|safe>` — choose a preset.
+- `--delay-ms <number>` — set a custom delay in milliseconds (0–60000). This overrides `--speed`.
+
+Invalid values produce a clear error and a non-zero exit code.
+
+### Tests
+
+Pure logic (unit normalization, unit matching, table fingerprinting, speed
+parsing, and duplicate-source detection) is covered by a dependency-free test
+runner:
+
+```bash
+npm test
 ```
 
 ## Output Format
@@ -185,6 +220,42 @@ The downloader skips files that already exist, which enables restart and resume 
 - Linux: fully working, with AppImage build validated.
 - Windows: packaging is configured and requires runtime validation.
 - macOS: packaging is configured and requires signing and runtime validation.
+
+## Reliability: verified unit activation
+
+PESU Academy swaps unit content through dynamic AJAX updates rather than full
+page loads. To guarantee that the slides saved for a unit actually belong to
+that unit, the downloader now **verifies the active unit before saving any
+PDFs**:
+
+- Units are re-discovered with fresh selectors before every unit transition, so
+  stale post-AJAX selectors are never reused.
+- Before navigating, the current slide table is fingerprinted (row count,
+  visible row text, and slide source handlers).
+- After clicking the intended unit, the run waits until at least one reliable
+  signal proves the unit changed: the active tab/control matches the intended
+  unit, a heading/breadcrumb names it, or the slide table fingerprint changes
+  from the previous unit.
+- If activation cannot be proven, the run retries with a freshly discovered
+  selector and then **fails that unit loudly** with a debug bundle instead of
+  silently saving the previous unit's slides.
+- As a final safeguard, if a unit resolves to the exact same set of source URLs
+  as the previous unit, the run records a high-confidence wrong-unit warning and
+  refuses to treat those downloads as valid.
+
+## Troubleshooting
+
+- **Unit 2/3/4 downloads Unit 1 again:** This was the original bug and is now
+  guarded against by verified unit activation. If you still see it, run in
+  `safe` speed (`--speed safe`, or "Safe" in the desktop UI) so AJAX content has
+  time to settle, then inspect the latest `debug/` bundle
+  (`*-unit-activation-failed-*.png/.html/.json`) to see what the page showed.
+- **A unit fails with "Could not prove Unit NN became active":** PESU did not
+  switch units in time. Re-run in `slow` or `safe` speed. The run continues with
+  the remaining units rather than saving wrong-unit content.
+- **"Unit source fingerprint matches previous unit":** The downloader detected
+  two units producing identical PDF sources and refused to count them as valid.
+  Re-run in a slower speed and check the debug bundle.
 
 ## Limitations
 

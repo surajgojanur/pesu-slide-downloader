@@ -3,6 +3,7 @@
 const path = require('path');
 const dotenv = require('dotenv');
 const { createPESUAgent } = require('../core/pesuAgent');
+const { parseSpeedOption, SPEED_PRESETS } = require('../core/unitTools');
 
 const ROOT_DIR = path.resolve(__dirname, '../..');
 dotenv.config({ path: path.join(ROOT_DIR, '.env'), quiet: true });
@@ -61,6 +62,28 @@ function parseArgs(argv) {
 
     if (arg.startsWith('--outputDir=')) {
       parsed.outputDir = arg.slice('--outputDir='.length);
+      continue;
+    }
+
+    if (arg === '--speed' && next) {
+      parsed.speed = next;
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith('--speed=')) {
+      parsed.speed = arg.slice('--speed='.length);
+      continue;
+    }
+
+    if (arg === '--delay-ms' && next) {
+      parsed.delayMs = next;
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith('--delay-ms=')) {
+      parsed.delayMs = arg.slice('--delay-ms='.length);
     }
   }
 
@@ -77,6 +100,9 @@ function printHelp() {
       '  --password <value>     PESU password (defaults to PESU_PASSWORD from .env)',
       '  --output <dir>         Download root directory',
       '  --headless             Run Chromium headless',
+      `  --speed <preset>       Automation speed: ${Object.keys(SPEED_PRESETS).join(' | ')}`,
+      `                         (${Object.entries(SPEED_PRESETS).map(([k, v]) => `${k}=${v}ms`).join(', ')})`,
+      '  --delay-ms <number>    Custom action delay in ms (0-60000, overrides --speed)',
       '  --help                 Show this help text',
       '',
     ].join('\n')
@@ -91,9 +117,22 @@ async function main() {
   }
 
   const outputDir = path.resolve(args.outputDir || path.join(ROOT_DIR, 'downloads', 'PESU_Academy'));
+
+  let speed;
+  try {
+    speed = parseSpeedOption({ speed: args.speed, delayMs: args.delayMs });
+  } catch (error) {
+    process.stderr.write(`${error.message}\n`);
+    process.exitCode = 1;
+    return;
+  }
+  process.stdout.write(`Automation speed: ${speed.label}\n`);
+
   const agent = createPESUAgent({
+    actionDelayMs: speed.actionDelayMs,
     headless: args.headless,
     outputDir,
+    speedLabel: speed.label,
     workspaceDir: ROOT_DIR,
   });
 

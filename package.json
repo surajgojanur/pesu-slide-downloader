@@ -11,6 +11,7 @@
     "pesu:agent": "node scripts/pesu-agent.js",
     "pesu:agent:debug": "PWDEBUG=1 node scripts/pesu-agent.js",
     "cli": "node src/cli/index.js",
+    "test": "node tests/unit.test.js && node tests/simulation.test.js",
     "desktop": "electron --no-sandbox .",
     "build:linux": "node scripts/install-playwright-chromium.js && electron-builder --linux AppImage",
     "build:win": "node scripts/install-playwright-chromium.js && electron-builder --win nsis",

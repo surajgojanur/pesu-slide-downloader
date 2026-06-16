@@ -6,6 +6,13 @@ const { resolveChromiumLaunchConfig } = require('./browserResolver');
 const { ensureDir, loadJson, now, sanitizeName, saveJson } = require('./fileUtils');
 const { createLogger } = require('./logger');
 const { createProgressStore } = require('./progressStore');
+const {
+  normalizeUnitIdentity,
+  findUnitByIdentity,
+  fingerprintSlidesTable,
+  fingerprintsDiffer,
+  isDuplicateSourceSet
+} = require('./unitTools');
 
 const PROJECT_ROOT = path.resolve(__dirname, '../..');
 
@@ -26,6 +33,8 @@ const ACTION_DELAY_MS = process.env.PESU_AGENT_DELAY_MS
   ? Number(process.env.PESU_AGENT_DELAY_MS)
   : (process.env.PWDEBUG ? 1400 : 800);
 const RETRY_COUNT = 3;
+const UNIT_ACTIVATION_RETRIES = 3;
+const UNIT_ACTIVATION_TIMEOUT = 20_000;
 let runtime = null;
 
 function pad2(value) {
@@ -223,6 +232,7 @@ function buildRuntime(options) {
       onProgress: options.onProgress,
       progressFile
     }),
+    currentUnitSourceKeys: [],
     stopRequested: false
   };
 }
@@ -1233,6 +1243,263 @@ async function openUnit(page, unit, courseLabel) {
   });
 }
 
+// Read the live page for any control/tab that is currently marked active so we can
+// prove which unit the SPA actually switched to.
+async function getActiveUnitState(page) {
+  const result = await page.evaluate(() => {
+    function clean(value) {
+      return (value || '').replace(/\s+/g, ' ').trim();
+    }
+
+    const selectors = [
+      'li.active',
+      'li.tab-active',
+      '.nav-tabs .active',
+      '.nav-pills .active',
+      '.nav li.active',
+      '[aria-selected="true"]',
+      '[role="tab"].active',
+      'a.active',
+      'button.active'
+    ];
+
+    const texts = [];
+    for (const selector of selectors) {
+      for (const element of document.querySelectorAll(selector)) {
+        const text = clean(element.innerText || element.textContent);
+        if (text && text.length <= 60) {
+          texts.push(text);
+        }
+      }
+    }
+
+    return { activeTexts: Array.from(new Set(texts)) };
+  }).catch(() => ({ activeTexts: [] }));
+
+  const activeUnits = result.activeTexts
+    .map((text) => normalizeUnitIdentity(text))
+    .filter((identity) => identity.isUnit);
+
+  return {
+    activeTexts: result.activeTexts,
+    activeUnits
+  };
+}
+
+// True when a visible heading/breadcrumb names the intended unit number.
+function headingMatchesUnit(observation, intendedIdentity) {
+  if (intendedIdentity.number == null) {
+    return false;
+  }
+  return (observation.headings || []).some((heading) => {
+    const identity = normalizeUnitIdentity(heading.text);
+    return identity.isUnit && identity.number === intendedIdentity.number;
+  });
+}
+
+// Block until at least one reliable signal proves the intended unit became active.
+// Returns { verified, verifiedBy, fingerprint, reason }.
+async function waitForUnitActivation(page, intendedIdentity, previousFingerprint) {
+  const deadline = Date.now() + UNIT_ACTIVATION_TIMEOUT;
+  let lastFingerprint = null;
+  let lastReason = 'no class table appeared';
+
+  while (Date.now() < deadline) {
+    await page.waitForSelector('table', { timeout: 2_000 }).catch(() => {});
+    const observation = await observePage(page, `unit-activation-${intendedIdentity.number ?? intendedIdentity.normalized}`);
+    const fingerprint = fingerprintSlidesTable(observation);
+    lastFingerprint = fingerprint;
+
+    if (fingerprint.isEmpty) {
+      lastReason = 'class table not yet populated';
+      await sleep(600);
+      continue;
+    }
+
+    const activeState = await getActiveUnitState(page);
+    const activeMatches =
+      intendedIdentity.number != null &&
+      activeState.activeUnits.some((identity) => identity.number === intendedIdentity.number);
+    const headingMatches = headingMatchesUnit(observation, intendedIdentity);
+    const unitSignal = activeMatches || headingMatches;
+    const tableChanged = previousFingerprint ? fingerprintsDiffer(previousFingerprint, fingerprint) : false;
+
+    if (!previousFingerprint) {
+      // First unit of the course: there is no prior unit to differ from. Require a unit
+      // signal when one is available, otherwise accept a populated table as the baseline.
+      if (unitSignal || (!activeState.activeUnits.length)) {
+        const by = activeMatches ? 'active tab' : headingMatches ? 'heading/breadcrumb' : 'initial unit table present';
+        return { verified: true, verifiedBy: by, fingerprint };
+      }
+      lastReason = 'first unit table present but active tab pointed at a different unit';
+    } else if (tableChanged && unitSignal) {
+      // Transition between units: require BOTH that the content changed from the previous
+      // unit AND that a unit signal points at the intended unit. A tab that merely keeps an
+      // "active" CSS class without the table actually changing is not enough.
+      const by = activeMatches ? 'active tab + table changed' : 'heading + table changed';
+      return { verified: true, verifiedBy: by, fingerprint };
+    } else if (tableChanged && !activeState.activeUnits.length) {
+      // No active-tab signal exposed by the page at all: fall back to content change.
+      return { verified: true, verifiedBy: 'slide table changed from previous unit', fingerprint };
+    } else {
+      lastReason = tableChanged
+        ? 'table changed but active tab does not match the intended unit'
+        : 'slide table still matches the previous unit (no change detected)';
+    }
+
+    await sleep(600);
+  }
+
+  return { verified: false, verifiedBy: null, fingerprint: lastFingerprint, reason: lastReason };
+}
+
+// Open a unit and refuse to continue until the intended unit is proven active.
+// Re-discovers units on every attempt so stale post-AJAX selectors are never reused.
+async function openUnitVerified(page, intendedUnit, courseLabel, previousFingerprint) {
+  const intendedIdentity = intendedUnit.identity || normalizeUnitIdentity(intendedUnit.text);
+  const intendedLabel = `Unit ${pad2(intendedIdentity.number ?? intendedUnit.number ?? '?')}`;
+
+  log(`Opening intended unit: ${intendedLabel} (${intendedUnit.text})`);
+  log(`Previous table fingerprint: ${previousFingerprint ? previousFingerprint.hash : '(none)'}`);
+
+  let lastReason = 'unit could not be located';
+
+  for (let attempt = 1; attempt <= UNIT_ACTIVATION_RETRIES; attempt += 1) {
+    const freshUnits = await discoverUnits(page, courseLabel);
+    const target = findUnitByIdentity(freshUnits, intendedIdentity);
+
+    if (!target) {
+      lastReason = `intended ${intendedLabel} was not present in freshly discovered units`;
+      log(`Unit activation attempt ${attempt}/${UNIT_ACTIVATION_RETRIES}: ${lastReason}. Retrying discovery.`);
+      await sleep();
+      continue;
+    }
+
+    await clickChoice(
+      page,
+      target,
+      `Opening unit ${target.text} because it is the freshly discovered tab matching the intended ${intendedLabel}.`
+    );
+
+    const activation = await waitForUnitActivation(page, intendedIdentity, previousFingerprint);
+    if (activation.verified) {
+      log(`New table fingerprint: ${activation.fingerprint.hash}`);
+      log(`Active unit verified by: ${activation.verifiedBy}`);
+      rememberSelector('units', `${courseLabel}::${target.text}`, {
+        selector: target.selector,
+        text: target.text,
+        reason: `unit activation verified by ${activation.verifiedBy}`
+      });
+      return { verified: true, fingerprint: activation.fingerprint, unit: target };
+    }
+
+    lastReason = activation.reason || 'unit activation not proven';
+    log(
+      `Unit activation attempt ${attempt}/${UNIT_ACTIVATION_RETRIES} for ${intendedLabel} not proven (${lastReason}). Re-discovering and retrying click.`
+    );
+    await sleep(attempt * 800);
+  }
+
+  const observation = await observePage(page, `unit-activation-failed-${sanitizeName(courseLabel)}-${intendedLabel}`);
+  await captureNamedDebugBundle(
+    page,
+    `unit-activation-failed-${sanitizeName(courseLabel)}-${sanitizeName(intendedUnit.text)}`,
+    observation
+  );
+  log(`Refusing to continue: could not prove ${intendedLabel} became active (${lastReason}).`);
+  throw new Error(
+    `Could not prove ${intendedLabel} (${intendedUnit.text}) became active in ${courseLabel}: ${lastReason}. Refusing to download possibly-wrong-unit slides.`
+  );
+}
+
+// PESU's "Back to Units" control returns to the DEFAULT unit (Unit 1) rather than the
+// unit currently being processed. After each slide download we must re-assert the
+// intended unit before reading the next row, or rows 2..N would be read from Unit 1.
+//
+// Verification is CONTENT-based: we confirm the visible slide table matches the intended
+// unit's known fingerprint. The active-tab CSS class is unreliable here (a tab can keep
+// its "active" class while the table content reverts), so we never trust it alone.
+// This is a no-op when the intended unit's table is already showing (e.g. Unit 1 itself).
+async function ensureUnitActive(page, unit, courseLabel, expectedFingerprint) {
+  const intended = unit.identity || normalizeUnitIdentity(unit.text);
+  const intendedLabel = `Unit ${pad2(intended.number ?? unit.number ?? '?')}`;
+  const haveBaseline = Boolean(expectedFingerprint && !expectedFingerprint.isEmpty);
+
+  const verdictFor = async () => {
+    const observation = await observePage(page, `ensure-active-${intendedLabel}`);
+    if (haveBaseline) {
+      const fingerprint = fingerprintSlidesTable(observation);
+      if (!fingerprint.isEmpty && fingerprint.hash === expectedFingerprint.hash) {
+        return { ok: true, by: 'table fingerprint' };
+      }
+      return { ok: false };
+    }
+    // No baseline fingerprint to compare against: fall back to the active-tab signal.
+    const state = await getActiveUnitState(page);
+    if (intended.number != null && state.activeUnits.some((id) => id.number === intended.number)) {
+      return { ok: true, by: 'active tab' };
+    }
+    return { ok: false };
+  };
+
+  if ((await verdictFor()).ok) {
+    return;
+  }
+
+  log(`Re-activating ${intendedLabel}: the unit view reverted (likely after "Back to Units").`);
+
+  for (let attempt = 1; attempt <= UNIT_ACTIVATION_RETRIES; attempt += 1) {
+    const freshUnits = await discoverUnits(page, courseLabel);
+
+    // On a retry, first switch to a different unit to break any "this tab is already
+    // active, do nothing" short-circuit before re-clicking the intended unit.
+    if (attempt > 1) {
+      const other = freshUnits.find((candidate) => {
+        const identity = normalizeUnitIdentity(candidate.text);
+        return identity.number != null && identity.number !== intended.number;
+      });
+      if (other) {
+        await clickChoice(page, other, `Switching to ${other.text} first to force ${intendedLabel} to reload.`).catch(() => {});
+        await page.waitForSelector('table', { timeout: 2_000 }).catch(() => {});
+      }
+    }
+
+    const target = findUnitByIdentity(freshUnits, intended);
+    if (!target) {
+      await sleep();
+      continue;
+    }
+
+    await clickChoice(
+      page,
+      target,
+      `Re-activating unit ${target.text} after returning to the unit table so the next row is read from the correct unit.`
+    );
+
+    const deadline = Date.now() + UNIT_ACTIVATION_TIMEOUT;
+    while (Date.now() < deadline) {
+      await page.waitForSelector('table', { timeout: 2_000 }).catch(() => {});
+      const verdict = await verdictFor();
+      if (verdict.ok) {
+        log(`Re-activation confirmed: ${intendedLabel} is active again (by ${verdict.by}).`);
+        return;
+      }
+      await sleep(400);
+    }
+    log(`Re-activation attempt ${attempt}/${UNIT_ACTIVATION_RETRIES} for ${intendedLabel} not confirmed; retrying.`);
+  }
+
+  const failObservation = await observePage(page, `reactivate-failed-${sanitizeName(courseLabel)}-${intendedLabel}`);
+  await captureNamedDebugBundle(
+    page,
+    `reactivate-failed-${sanitizeName(courseLabel)}-${sanitizeName(unit.text)}`,
+    failObservation
+  );
+  throw new Error(
+    `Could not re-activate ${intendedLabel} after returning to the unit table; refusing to read rows from the wrong unit.`
+  );
+}
+
 function buildCookieHeader(cookies, urlString) {
   const url = new URL(urlString);
   return cookies
@@ -1503,6 +1770,11 @@ async function downloadArtifactSources(context, page, sources, courseDir, unitDi
     const key = makeProgressKey(courseLabel, unitDir, classTitle, assetLabel);
 
     ensureDir(path.dirname(targetPath));
+
+    const resolvedSourceKey = source.href || source.src || source.url;
+    if (resolvedSourceKey && /^https?:/i.test(resolvedSourceKey) && runtime) {
+      runtime.currentUnitSourceKeys.push(String(resolvedSourceKey).split('#')[0]);
+    }
 
     if (fs.existsSync(targetPath)) {
       log(`Skip existing file: ${targetPath}`);
@@ -2085,8 +2357,11 @@ async function downloadSlidesForRow(page, context, table, row, unit, course, cla
   }
 }
 
-async function processUnit(page, context, course, unit) {
-  await openUnit(page, unit, course.label);
+async function processUnit(page, context, course, unit, previousUnitState) {
+  const previousFingerprint = previousUnitState ? previousUnitState.fingerprint : null;
+  const activation = await openUnitVerified(page, unit, course.label, previousFingerprint);
+  runtime.currentUnitSourceKeys = [];
+
   await page.waitForSelector('table', { timeout: DEFAULT_TIMEOUT }).catch(() => {});
   const observation = await observePage(page, `unit-${sanitizeName(unit.text)}`);
   let table = chooseSlidesTable(observation);
@@ -2101,7 +2376,7 @@ async function processUnit(page, context, course, unit) {
         reason: 'No slide table could be inferred for this unit'
       }
     );
-    return;
+    return { fingerprint: activation.fingerprint, sourceKeys: [] };
   }
 
   log(`Using table "${table.selector}" with headers: ${table.headers.join(' | ')}`);
@@ -2116,6 +2391,9 @@ async function processUnit(page, context, course, unit) {
 
   for (let rowIndex = 0; ; rowIndex += 1) {
     throwIfStopRequested(`unit ${course.label} / ${unit.text}`);
+    // "Back to Units" resets the table to the default unit, so re-assert the intended
+    // unit before reading each row (no-op when it is already active).
+    await ensureUnitActive(page, unit, course.label, activation.fingerprint);
     await page.waitForSelector('table', { timeout: DEFAULT_TIMEOUT }).catch(() => {});
     const liveObservation = await observePage(
       page,
@@ -2159,6 +2437,25 @@ async function processUnit(page, context, course, unit) {
       );
     });
   }
+
+  const sourceKeys = Array.from(new Set(runtime.currentUnitSourceKeys));
+  const previousSourceKeys = previousUnitState ? previousUnitState.sourceKeys : null;
+
+  if (isDuplicateSourceSet(previousSourceKeys, sourceKeys)) {
+    const message =
+      'Unit source fingerprint matches previous unit; refusing to save duplicate wrong-unit downloads.';
+    log(`WRONG-UNIT WARNING for ${course.label} / ${unit.text}: ${message}`);
+    appendNote('Wrong Unit Detection', `${course.label} / ${unit.text}: ${message} Sources: ${sourceKeys.join(' | ')}`);
+    getProgressStore().recordFailed(
+      makeProgressKey(course.label, unit.dirName, unit.text, 'duplicate-source-fingerprint'),
+      {
+        status: 'failed',
+        reason: message
+      }
+    );
+  }
+
+  return { fingerprint: activation.fingerprint, sourceKeys };
 }
 
 async function returnToMyCourses(page) {
@@ -2184,6 +2481,7 @@ async function runPESUDownloader(options = {}) {
   initFiles();
 
   log('Starting PESU adaptive browser agent');
+  log(`Automation speed: ${options.speedLabel || `${runtime.actionDelayMs}ms per action`} (action delay ${runtime.actionDelayMs}ms)`);
   log(`Using Chromium executable (${runtime.browser.source}): ${runtime.browser.executablePath}`);
   appendNote('Run Start', 'Agent run started with Playwright automation and runtime-configured credentials.');
   getProgressStore().note('Downloader started', { stage: 'starting' });
@@ -2229,10 +2527,40 @@ async function runPESUDownloader(options = {}) {
       ensureDir(course.directory);
       getProgressStore().note(`Processing course ${course.label}`);
 
-      const units = await discoverUnits(page, course.label);
-      for (const unit of units) {
+      const detectedUnits = await discoverUnits(page, course.label);
+      const unitPlan = detectedUnits.map((unit) => ({
+        ...unit,
+        identity: normalizeUnitIdentity(unit.text)
+      }));
+      log(
+        `Detected units: ${unitPlan
+          .map((unit) => `Unit ${pad2(unit.identity.number ?? unit.number)}`)
+          .join(' | ')}`
+      );
+
+      let previousUnitState = null;
+      for (const unit of unitPlan) {
         throwIfStopRequested(`course ${course.label}`);
-        await processUnit(page, context, course, unit);
+        try {
+          previousUnitState = await processUnit(page, context, course, unit, previousUnitState);
+        } catch (error) {
+          log(`Unit ${unit.text} failed: ${error.message}`);
+          getProgressStore().recordFailed(
+            makeProgressKey(course.label, unit.dirName, unit.text, 'unit-activation'),
+            {
+              status: 'failed',
+              reason: error.message
+            }
+          );
+          // Recover the course/unit context so the next unit starts from a known state.
+          await returnToMyCourses(page).catch(() => {});
+          const refreshed = await discoverCourses(page).catch(() => []);
+          const reopened = refreshed[courseIndex];
+          if (reopened) {
+            await openCourse(page, reopened).catch(() => {});
+          }
+          previousUnitState = null;
+        }
       }
     }
 
@@ -2264,5 +2592,19 @@ async function runPESUDownloader(options = {}) {
 
 module.exports = {
   requestStop,
-  runPESUDownloader
+  runPESUDownloader,
+  // Test-only hooks: let an in-memory simulation drive the real navigation logic
+  // without launching a browser. Not part of the public API.
+  __test: {
+    setRuntime(testRuntime) {
+      runtime = testRuntime;
+    },
+    clearRuntime() {
+      runtime = null;
+    },
+    processUnit,
+    discoverUnits,
+    openUnitVerified,
+    ensureUnitActive
+  }
 };

@@ -48,8 +48,25 @@
             </div>
           </div>
 
+          <label class="field">
+            <span>Automation speed</span>
+            <select id="speedSelect">
+              <option value="fast">Fast (250ms)</option>
+              <option value="normal" selected>Normal (800ms)</option>
+              <option value="slow">Slow (1400ms)</option>
+              <option value="safe">Safe (2200ms)</option>
+              <option value="custom">Custom delay…</option>
+            </select>
+          </label>
+
+          <label class="field" id="customDelayField" hidden>
+            <span>Custom delay (ms)</span>
+            <input id="customDelayInput" type="number" min="0" max="60000" step="50" placeholder="e.g. 1200" />
+          </label>
+
           <div class="action-row">
             <button id="startButton" class="primary-button" type="button">Start Download</button>
+            <button id="stopButton" class="ghost-button" type="button" disabled>Stop</button>
             <button id="openFolderButton" class="ghost-button" type="button">Open Folder</button>
           </div>
 

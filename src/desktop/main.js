@@ -1,9 +1,11 @@
 const path = require('path');
 const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
 const { createPESUAgent } = require('../core/pesuAgent');
+const { parseSpeedOption } = require('../core/unitTools');
 
 let mainWindow;
 let activeRun = null;
+let activeAgent = null;
 let lastOutputDir = '';
 
 function sendToRenderer(channel, payload) {
@@ -83,6 +85,13 @@ ipcMain.handle('pesu:start', async (_event, payload = {}) => {
     throw new Error('Password is required.');
   }
 
+  let speed;
+  try {
+    speed = parseSpeedOption({ speed: payload.speed, delayMs: payload.delayMs });
+  } catch (error) {
+    throw new Error(error.message);
+  }
+
   lastOutputDir = outputDir;
   sendToRenderer('pesu:run-state', {
     outputDir,
@@ -90,10 +99,13 @@ ipcMain.handle('pesu:start', async (_event, payload = {}) => {
   });
 
   const agent = createPESUAgent({
+    actionDelayMs: speed.actionDelayMs,
     headless: false,
     outputDir,
+    speedLabel: speed.label,
     workspaceDir: app.getPath('userData'),
   });
+  activeAgent = agent;
 
   activeRun = agent.run({
     appRoot: app.getAppPath(),
@@ -132,7 +144,17 @@ ipcMain.handle('pesu:start', async (_event, payload = {}) => {
     throw error;
   } finally {
     activeRun = null;
+    activeAgent = null;
   }
+});
+
+ipcMain.handle('pesu:stop', async () => {
+  if (activeAgent && typeof activeAgent.requestStop === 'function') {
+    activeAgent.requestStop();
+    sendToRenderer('pesu:log', { line: 'Stop requested by user. Finishing the current step...', level: 'info' });
+    return { ok: true };
+  }
+  return { ok: false, error: 'No active download to stop.' };
 });
 
 app.whenReady().then(() => {
