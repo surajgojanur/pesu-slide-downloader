@@ -26,7 +26,7 @@ const path = require('path');
 
 const { ensureDir } = require('../src/core/fileUtils');
 const { createProgressStore } = require('../src/core/progressStore');
-const { normalizeUnitIdentity } = require('../src/core/unitTools');
+const { normalizeUnitIdentity, buildSelectionFromCli, isUnitSelected } = require('../src/core/unitTools');
 const downloader = require('../src/core/downloader');
 
 let passed = 0;
@@ -572,6 +572,79 @@ async function main() {
         units.some((u) => /Combinatorial Optimization/i.test(u.text)),
         'the 4th unit (Combinatorial Optimization) must be present'
       );
+    } finally {
+      downloader.__test.clearRuntime();
+    }
+  });
+
+  // 8. Keyword-less unit tabs (e.g. Algorithms' "Combinatorial Optimization") must get
+  //    a positional fallback number stamped on their identity, so number-based logic
+  //    (--unit N, verified activation) has something to work with.
+  await test('detectUnitChoices stamps a positional number on keyword-less unit identities', async () => {
+    const { runtime } = buildTestRuntime();
+    downloader.__test.setRuntime(runtime);
+    try {
+      const labels = [
+        'Introduction, Analysis Framework and Sorting Techniques',
+        'Searching and Graph Problems',
+        'Data Compression Algorithms and Complexity Classes',
+        'Combinatorial Optimization'
+      ];
+      const page = createObservationMockPage(unitTabsObservation(labels, { wrapFrom: 3 }));
+      const units = await downloader.__test.discoverUnits(page, 'UQ25CA651B - Algorithms Analysis and Design');
+      assert.deepStrictEqual(
+        units.map((u) => u.identity.number),
+        [1, 2, 3, 4],
+        'keyword-less tabs should carry positional identity numbers 1..4'
+      );
+      assert.match(units[3].text, /Combinatorial Optimization/);
+    } finally {
+      downloader.__test.clearRuntime();
+    }
+  });
+
+  // 9. The fallback must NEVER override a genuinely parsed unit number. A course with a
+  //    numbering gap (units 1 and 3) must keep [1, 3], not the positional [1, 2].
+  await test('detectUnitChoices never overrides a real parsed unit number with the positional index', async () => {
+    const { runtime } = buildTestRuntime();
+    downloader.__test.setRuntime(runtime);
+    try {
+      const labels = ['Unit 1: Foundations', 'Unit 3: Advanced Topics'];
+      const page = createObservationMockPage(unitTabsObservation(labels));
+      const units = await downloader.__test.discoverUnits(page, 'XX - Gap Numbered Course');
+      assert.deepStrictEqual(
+        units.map((u) => u.identity.number),
+        [1, 3],
+        'real numbers 1 and 3 must be preserved, not replaced by positional 1 and 2'
+      );
+    } finally {
+      downloader.__test.clearRuntime();
+    }
+  });
+
+  // 10. End-to-end: `--unit 4` must now select the keyword-less 4th unit when code reads
+  //     identity.number directly (the run loop's selection filter).
+  await test('--unit 4 selects a keyword-less 4th unit via the stamped positional number', async () => {
+    const { runtime } = buildTestRuntime();
+    downloader.__test.setRuntime(runtime);
+    try {
+      const labels = [
+        'Introduction, Analysis Framework and Sorting Techniques',
+        'Searching and Graph Problems',
+        'Data Compression Algorithms and Complexity Classes',
+        'Combinatorial Optimization'
+      ];
+      const page = createObservationMockPage(unitTabsObservation(labels, { wrapFrom: 3 }));
+      const detected = await downloader.__test.discoverUnits(page, 'UQ25CA651B - Algorithms Analysis and Design');
+      const courseChoice = { courseCode: 'UQ25CA651B', courseTitle: 'Algorithms Analysis and Design' };
+      const selection = buildSelectionFromCli('UQ25CA651B', '4');
+      // Mirror runPESUDownloader's unitPlan construction (preserve the stamped identity)
+      // and filter using identity.number directly.
+      const unitPlan = detected
+        .map((u) => ({ ...u, identity: u.identity || normalizeUnitIdentity(u.text) }))
+        .filter((u) => isUnitSelected(selection, courseChoice, u.identity.number));
+      assert.strictEqual(unitPlan.length, 1, `--unit 4 should select exactly one unit, got ${unitPlan.length}`);
+      assert.match(unitPlan[0].text, /Combinatorial Optimization/);
     } finally {
       downloader.__test.clearRuntime();
     }

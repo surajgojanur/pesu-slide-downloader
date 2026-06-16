@@ -761,9 +761,17 @@ function detectUnitChoices(observation) {
       const unitName = match
         ? sanitizeName(choice.text.replace(match[0], '').replace(/^[-:\s]+/, ''), choice.text)
         : sanitizeName(choice.text);
+      // Stamp the unit identity here so keyword-less tabs (e.g. "Combinatorial
+      // Optimization") still carry a usable number for --unit N selection and
+      // verified activation. Use the real parsed number when available (digits OR
+      // roman, via normalizeUnitIdentity) and only fall back to the positional
+      // index — never override a genuinely parsed number.
+      const baseIdentity = normalizeUnitIdentity(choice.text);
+      const identity = { ...baseIdentity, number: baseIdentity.number ?? number };
       return {
         ...choice,
         number,
+        identity,
         dirName: `Unit ${pad2(number)} - ${unitName}`
       };
     })
@@ -2772,7 +2780,9 @@ async function runPESUDownloader(options = {}) {
       const unitPlan = detectedUnits
         .map((unit) => ({
           ...unit,
-          identity: normalizeUnitIdentity(unit.text)
+          // Prefer the identity stamped by detectUnitChoices (which carries a
+          // positional fallback number for keyword-less tabs); recompute only if absent.
+          identity: unit.identity || normalizeUnitIdentity(unit.text)
         }))
         .filter((unit) =>
           isUnitSelected(selection, courseChoice, unit.identity.number ?? unit.number)
