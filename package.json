@@ -7,28 +7,42 @@
     "postinstall": "node scripts/install-playwright-chromium.js",
     "playwright:install": "node scripts/install-playwright-chromium.js",
     "pesu": "node scripts/pesu-download-slides.js",
-    "pesu:debug": "PWDEBUG=1 node scripts/pesu-download-slides.js",
+    "pesu:debug": "cross-env PWDEBUG=1 node scripts/pesu-download-slides.js",
     "pesu:agent": "node scripts/pesu-agent.js",
-    "pesu:agent:debug": "PWDEBUG=1 node scripts/pesu-agent.js",
+    "pesu:agent:debug": "cross-env PWDEBUG=1 node scripts/pesu-agent.js",
     "cli": "node src/cli/index.js",
     "test": "node tests/unit.test.js && node tests/simulation.test.js",
-    "desktop": "electron --no-sandbox .",
+    "desktop": "electron .",
     "build:linux": "node scripts/install-playwright-chromium.js && electron-builder --linux AppImage",
     "build:win": "node scripts/install-playwright-chromium.js && electron-builder --win nsis",
     "build:mac": "node scripts/install-playwright-chromium.js && electron-builder --mac dmg"
   },
-  "keywords": [],
+  "keywords": [
+    "pesu",
+    "pesu-academy",
+    "slides",
+    "pdf",
+    "downloader",
+    "playwright",
+    "electron",
+    "browser-automation",
+    "scraper"
+  ],
   "author": {
-    "name": "PESU Downloader",
-    "email": "support@pesu-downloader.local"
+    "name": "Suraj Gojanur",
+    "email": "surajgojanur@gmail.com"
   },
   "license": "ISC",
   "type": "commonjs",
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "dotenv": "^17.4.2",
     "playwright": "^1.59.1"
   },
   "devDependencies": {
+    "cross-env": "^7.0.3",
     "electron": "^41.3.0",
     "electron-builder": "^26.8.1"
   },

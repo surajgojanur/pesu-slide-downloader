@@ -230,6 +230,126 @@ function isDuplicateSourceSet(previousKeys, currentKeys) {
   return a.every((value, index) => value === b[index]);
 }
 
+// ---------------------------------------------------------------------------
+// Course / unit selection
+// ---------------------------------------------------------------------------
+//
+// A normalized selection is one of:
+//   null                              => download everything (back-compat)
+//   { courses: [ { key, units } ] }   => only matching courses / units
+// where `key` is a course code/label token ('*' matches every course) and
+// `units` is an array of unit numbers (empty/null => all units of that course).
+
+// Split "a, b ; c" or ["a","b"] into trimmed, non-empty tokens.
+function parseCsvList(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean);
+  }
+  if (value === undefined || value === null) {
+    return [];
+  }
+  return String(value)
+    .split(/[,;]+/)
+    .map((token) => token.trim())
+    .filter(Boolean);
+}
+
+// Parse a unit filter like "1,2,3" or "Unit 1, III" into de-duplicated numbers.
+function parseUnitNumbers(value) {
+  const numbers = [];
+  for (const token of parseCsvList(value)) {
+    if (/^\d+$/.test(token)) {
+      numbers.push(Number(token));
+      continue;
+    }
+    const identity = normalizeUnitIdentity(token);
+    if (identity.number != null) {
+      numbers.push(identity.number);
+      continue;
+    }
+    // Accept bare roman numerals too (e.g. "--unit I,II,III").
+    const roman = romanToInt(token);
+    if (roman != null) {
+      numbers.push(roman);
+    }
+  }
+  return Array.from(new Set(numbers));
+}
+
+// Build a normalized selection from CLI-style --course / --unit values.
+function buildSelectionFromCli(courseValue, unitValue) {
+  const courseTokens = parseCsvList(courseValue);
+  const unitNumbers = parseUnitNumbers(unitValue);
+
+  if (!courseTokens.length && !unitNumbers.length) {
+    return null;
+  }
+
+  if (courseTokens.length) {
+    return {
+      courses: courseTokens.map((key) => ({
+        key,
+        units: unitNumbers.length ? unitNumbers : null
+      }))
+    };
+  }
+
+  // Only units were supplied: apply them to every course via a wildcard key.
+  return { courses: [{ key: '*', units: unitNumbers }] };
+}
+
+function courseTokensFor(course) {
+  const code = String(course.courseCode || course.code || '').toLowerCase().trim();
+  const title = String(course.courseTitle || course.name || '').toLowerCase().trim();
+  const label = String(
+    course.label || course.text || `${course.courseCode || ''} ${course.courseTitle || ''}`
+  )
+    .toLowerCase()
+    .trim();
+  return { code, title, label };
+}
+
+// True when a discovered course matches a selection key ('*' matches all).
+function courseMatchesKey(course, key) {
+  const token = String(key || '').toLowerCase().trim();
+  if (!token) return false;
+  if (token === '*') return true;
+  const { code, title, label } = courseTokensFor(course);
+  return (
+    code === token ||
+    label === token ||
+    (Boolean(code) && code.includes(token)) ||
+    (Boolean(title) && title.includes(token)) ||
+    (Boolean(label) && label.includes(token))
+  );
+}
+
+function isCourseSelected(selection, course) {
+  if (!selection || !Array.isArray(selection.courses) || !selection.courses.length) {
+    return true;
+  }
+  return selection.courses.some((entry) => courseMatchesKey(course, entry.key));
+}
+
+// Returns a Set of selected unit numbers for a course, or null when all units
+// should be processed.
+function selectedUnitsForCourse(selection, course) {
+  if (!selection || !Array.isArray(selection.courses) || !selection.courses.length) {
+    return null;
+  }
+  const entry = selection.courses.find((item) => courseMatchesKey(course, item.key));
+  if (!entry || !entry.units || !entry.units.length) {
+    return null;
+  }
+  return new Set(entry.units.map(Number));
+}
+
+function isUnitSelected(selection, course, unitNumber) {
+  const set = selectedUnitsForCourse(selection, course);
+  if (!set) return true;
+  return set.has(Number(unitNumber));
+}
+
 module.exports = {
   SPEED_PRESETS,
   IGNORED_UNIT_TABS,
@@ -242,5 +362,12 @@ module.exports = {
   fingerprintsDiffer,
   parseSpeedOption,
   sourceSetFingerprint,
-  isDuplicateSourceSet
+  isDuplicateSourceSet,
+  parseCsvList,
+  parseUnitNumbers,
+  buildSelectionFromCli,
+  courseMatchesKey,
+  isCourseSelected,
+  selectedUnitsForCourse,
+  isUnitSelected
 };

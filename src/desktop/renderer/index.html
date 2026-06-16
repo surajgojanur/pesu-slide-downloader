@@ -64,6 +64,24 @@
             <input id="customDelayInput" type="number" min="0" max="60000" step="50" placeholder="e.g. 1200" />
           </label>
 
+          <div class="discovery-row">
+            <button id="discoverButton" class="ghost-button" type="button">Discover Courses &amp; Units</button>
+            <p class="discovery-hint">
+              Optional: list your courses and pick exactly what to download. Skip this to download everything.
+            </p>
+          </div>
+
+          <div class="selection-panel" id="selectionPanel" hidden>
+            <div class="selection-toolbar">
+              <strong>Select what to download</strong>
+              <span class="selection-actions">
+                <button id="selectAllButton" class="link-button" type="button">Select all</button>
+                <button id="clearAllButton" class="link-button" type="button">Clear</button>
+              </span>
+            </div>
+            <div id="selectionTree" class="selection-tree"></div>
+          </div>
+
           <div class="action-row">
             <button id="startButton" class="primary-button" type="button">Start Download</button>
             <button id="stopButton" class="ghost-button" type="button" disabled>Stop</button>
@@ -74,6 +92,15 @@
             <div class="progress-heading">
               <h3>Progress</h3>
               <span id="progressMessage" class="progress-message">Waiting for input.</span>
+            </div>
+            <div class="progress-bar-wrap" id="progressBarWrap" hidden>
+              <div class="progress-track">
+                <div id="progressBarFill" class="progress-fill"></div>
+              </div>
+              <div class="progress-detail">
+                <span id="courseProgress">Course —</span>
+                <span id="unitProgress">Unit —</span>
+              </div>
             </div>
             <div class="summary-grid">
               <article class="summary-card">
@@ -95,7 +122,11 @@
         <section class="log-panel">
           <div class="panel-heading">
             <h2>Live Log</h2>
-            <p>Messages stream from the Electron main process while the downloader runs.</p>
+            <p>Key milestones appear here while the downloader runs.</p>
+            <label class="log-toggle">
+              <input type="checkbox" id="technicalToggle" />
+              <span>Show technical details</span>
+            </label>
           </div>
           <div id="logList" class="log-list" aria-live="polite"></div>
         </section>

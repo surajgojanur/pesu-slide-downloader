@@ -13,7 +13,13 @@ const {
   sourceSetFingerprint,
   isDuplicateSourceSet,
   romanToInt,
-  SPEED_PRESETS
+  SPEED_PRESETS,
+  parseCsvList,
+  parseUnitNumbers,
+  buildSelectionFromCli,
+  isCourseSelected,
+  selectedUnitsForCourse,
+  isUnitSelected
 } = require('../src/core/unitTools');
 
 let passed = 0;
@@ -186,6 +192,73 @@ test('isDuplicateSourceSet ignores empty sets', () => {
   assert.strictEqual(isDuplicateSourceSet([], ['https://x/a.pdf']), false);
   assert.strictEqual(isDuplicateSourceSet(['https://x/a.pdf'], []), false);
   assert.strictEqual(isDuplicateSourceSet(null, undefined), false);
+});
+
+// ---------------------------------------------------------------------------
+// course / unit selection
+// ---------------------------------------------------------------------------
+test('parseCsvList splits strings and trims, and passes through arrays', () => {
+  assert.deepStrictEqual(parseCsvList('a, b ; c'), ['a', 'b', 'c']);
+  assert.deepStrictEqual(parseCsvList(['x', ' y ']), ['x', 'y']);
+  assert.deepStrictEqual(parseCsvList(''), []);
+  assert.deepStrictEqual(parseCsvList(undefined), []);
+});
+
+test('parseUnitNumbers parses digits, roman and "Unit N" forms, deduped', () => {
+  assert.deepStrictEqual(parseUnitNumbers('1,2,3'), [1, 2, 3]);
+  assert.deepStrictEqual(parseUnitNumbers('Unit 1, III'), [1, 3]);
+  assert.deepStrictEqual(parseUnitNumbers('2,2,2'), [2]);
+  assert.deepStrictEqual(parseUnitNumbers(''), []);
+});
+
+test('buildSelectionFromCli returns null when nothing is supplied', () => {
+  assert.strictEqual(buildSelectionFromCli(undefined, undefined), null);
+  assert.strictEqual(buildSelectionFromCli('', ''), null);
+});
+
+test('buildSelectionFromCli maps --course and --unit', () => {
+  const sel = buildSelectionFromCli('UQ25CA651B,Network', '1,2');
+  assert.deepStrictEqual(sel, {
+    courses: [
+      { key: 'UQ25CA651B', units: [1, 2] },
+      { key: 'Network', units: [1, 2] }
+    ]
+  });
+});
+
+test('buildSelectionFromCli with only --unit applies to all courses via wildcard', () => {
+  const sel = buildSelectionFromCli(undefined, '3');
+  assert.deepStrictEqual(sel, { courses: [{ key: '*', units: [3] }] });
+});
+
+test('isCourseSelected matches by code, label substring, and wildcard', () => {
+  const course = { courseCode: 'UQ25CA651B', courseTitle: 'Algorithms Analysis and Design' };
+  assert.strictEqual(isCourseSelected(null, course), true);
+  assert.strictEqual(isCourseSelected({ courses: [{ key: 'uq25ca651b' }] }, course), true);
+  assert.strictEqual(isCourseSelected({ courses: [{ key: 'algorithms' }] }, course), true);
+  assert.strictEqual(isCourseSelected({ courses: [{ key: '*' }] }, course), true);
+  assert.strictEqual(isCourseSelected({ courses: [{ key: 'network security' }] }, course), false);
+});
+
+test('selectedUnitsForCourse and isUnitSelected honor per-course units', () => {
+  const course = { courseCode: 'UQ25CA651B', courseTitle: 'Algorithms' };
+  const selection = { courses: [{ key: 'UQ25CA651B', units: [2, 4] }] };
+  const set = selectedUnitsForCourse(selection, course);
+  assert.deepStrictEqual([...set].sort(), [2, 4]);
+  assert.strictEqual(isUnitSelected(selection, course, 2), true);
+  assert.strictEqual(isUnitSelected(selection, course, 3), false);
+  // null selection or empty units => all units allowed
+  assert.strictEqual(isUnitSelected(null, course, 9), true);
+  assert.strictEqual(isUnitSelected({ courses: [{ key: 'UQ25CA651B', units: [] }] }, course, 9), true);
+});
+
+test('wildcard unit selection applies the same units to every course', () => {
+  const selection = { courses: [{ key: '*', units: [1] }] };
+  const courseA = { courseCode: 'AAA', courseTitle: 'A' };
+  const courseB = { courseCode: 'BBB', courseTitle: 'B' };
+  assert.strictEqual(isUnitSelected(selection, courseA, 1), true);
+  assert.strictEqual(isUnitSelected(selection, courseA, 2), false);
+  assert.strictEqual(isUnitSelected(selection, courseB, 1), true);
 });
 
 // ---------------------------------------------------------------------------

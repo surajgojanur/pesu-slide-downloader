@@ -2,7 +2,8 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const BROWSER_NOT_INSTALLED_MESSAGE = 'Browser not installed. Please reinstall app.';
+const BROWSER_NOT_INSTALLED_MESSAGE =
+  'Chromium browser not found. Run "npm run playwright:install" to download it, or reinstall the app.';
 
 function fileExists(targetPath) {
   try {

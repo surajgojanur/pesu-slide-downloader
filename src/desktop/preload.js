@@ -10,6 +10,7 @@ function subscribe(channel, callback) {
 
 contextBridge.exposeInMainWorld('pesuDesktop', {
   chooseOutputDir: () => ipcRenderer.invoke('pesu:choose-output-dir'),
+  discoverCourses: (payload) => ipcRenderer.invoke('pesu:discover', payload),
   getDefaultOutputDir: () => ipcRenderer.invoke('pesu:get-default-output-dir'),
   onLog: (callback) => subscribe('pesu:log', callback),
   onProgress: (callback) => subscribe('pesu:progress', callback),

@@ -780,7 +780,25 @@ async function processUnit(page, context, courseDir, unitText, unitIndex, progre
   }
 }
 
+function printDeprecationNotice() {
+  process.stderr.write(
+    [
+      '',
+      '======================================================================',
+      ' DEPRECATED: "npm run pesu" runs the original standalone prototype.',
+      ' It requires you to log in MANUALLY and is no longer maintained.',
+      '',
+      ' Use the maintained tools instead:',
+      '   npm run desktop      (desktop app, recommended)',
+      '   npm run cli          (command line, reads PESU_* from .env)',
+      '======================================================================',
+      '',
+    ].join('\n')
+  );
+}
+
 async function main() {
+  printDeprecationNotice();
   ensureDir(PROFILE_DIR);
   ensureDir(DOWNLOAD_ROOT);
   ensureDir(TMP_DOWNLOAD_DIR);

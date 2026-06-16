@@ -1,323 +1,378 @@
 # PESU Academy Slide Downloader
 
-## Overview
+> A desktop app and CLI that logs into [PESU Academy](https://www.pesuacademy.com/),
+> walks through every course and unit, and saves the lecture slide PDFs into a
+> clean, course/unit-organised folder on your computer.
 
-PESU Academy Slide Downloader is a desktop application and automation engine for downloading slide PDFs from PESU Academy into a structured local archive.
+PESU Academy serves slides one class at a time through a single-page interface:
+you open a course, switch to a unit tab, click a class, open the slide viewer,
+and save the PDF — then repeat for hundreds of classes. This project automates
+that entire loop with a real Chromium browser driven by **Playwright**, wrapped
+in a friendly **Electron** desktop UI for non-technical students (and a CLI for
+power users).
 
-This project exists to remove the repetitive, error-prone manual workflow of opening each course, navigating units, opening slide viewers, and saving PDFs one by one. The primary audience is non-technical PESU students who need a simple desktop interface: enter credentials, choose an output folder, start the run, and monitor progress.
+---
 
-The current release provides a working Linux desktop build path and a shared Playwright core that also powers CLI and legacy script entrypoints.
+## Table of Contents
+
+- [Features](#features)
+- [Tech Stack & Requirements](#tech-stack--requirements)
+- [Installation & Setup](#installation--setup)
+- [Running the App](#running-the-app)
+  - [Desktop (recommended)](#desktop-recommended)
+  - [CLI](#cli)
+  - [Tests](#tests)
+  - [Packaged builds](#packaged-builds)
+- [Environment Variables](#environment-variables)
+- [Automation Speed](#automation-speed)
+- [Output Format](#output-format)
+- [Project Structure](#project-structure)
+- [How It Works](#how-it-works)
+- [Troubleshooting](#troubleshooting)
+- [Security & Privacy](#security--privacy)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+- [License](#license)
+- [Disclaimer](#disclaimer)
+
+For a deep technical reference (module-by-module breakdown, data flow, function
+catalogue), see **[DOCUMENTATION.md](./DOCUMENTATION.md)**.
+
+---
 
 ## Features
 
-- Automated login to PESU Academy with runtime-provided credentials.
-- Automatic course discovery from the student course view.
-- Dynamic unit detection based on the live PESU UI structure.
-- Slide-to-PDF extraction using Playwright browser automation.
-- Organized course and unit folder structure on disk.
-- Resume behavior through skip-existing-file detection.
-- Local desktop UI for non-technical users.
-- Cross-platform packaging configuration:
-  Linux is validated through AppImage.
-  Windows and macOS packaging are configured for later testing.
+- **One-click automated login** to PESU Academy using credentials supplied at runtime.
+- **Automatic course discovery** from the *My Courses* table.
+- **Dynamic, adaptive unit detection** — reads the live DOM instead of relying on hard-coded selectors, so it tolerates UI variations (`Unit 1`, `Unit-2`, `UNIT III`, `Module 4`, …).
+- **Slide-to-PDF extraction** across multiple viewer styles (direct links, `loadIframe(...)` handlers, glyphicon "eye" viewers, `blob:` PDFs, popups, and Playwright download events).
+- **Verified unit activation** — proves the correct unit is loaded (by active tab, heading, and a content fingerprint) before saving any PDF, guarding against the SPA "wrong unit" bug.
+- **Resume / skip-existing** — files already on disk are skipped, so interrupted runs continue where they left off.
+- **Organised output** mirroring the PESU `Course / Unit / Class.pdf` hierarchy.
+- **Adjustable automation speed** (Fast / Normal / Slow / Safe / custom delay) for flaky connections.
+- **Live progress** — streaming log, plus downloaded / skipped / failed counters, and a Stop button.
+- **Credential redaction** in all logs.
+- **Cross-platform packaging** configured for Linux (validated), Windows, and macOS.
 
-## Architecture
+---
 
-### Core
+## Tech Stack & Requirements
 
-The system is centered on a Playwright automation engine that drives Chromium, logs into PESU Academy, discovers courses and units, resolves slide artifacts, and saves PDFs to the filesystem.
+| Area | Technology |
+| --- | --- |
+| Language / runtime | Node.js (CommonJS), **Node 18+** required (uses the built-in global `fetch`) |
+| Browser automation | [Playwright](https://playwright.dev/) `^1.59` driving managed Chromium |
+| Desktop shell | [Electron](https://www.electronjs.org/) `^41` |
+| Packaging | [electron-builder](https://www.electron.build/) `^26` (AppImage / deb / nsis / dmg) |
+| Config | [dotenv](https://github.com/motdotla/dotenv) `^17` (CLI only) |
+| Tests | Dependency-free Node assertion runner (`node:assert`) |
 
-Key core responsibilities:
+**Prerequisites**
 
-- `browserResolver`: selects the correct Chromium binary for development and packaged Electron builds.
-- `downloader`: orchestrates login, course traversal, unit traversal, slide extraction, skip logic, logging, progress tracking, and debug bundle capture.
-- Supporting utilities: logging, progress persistence, path handling, and agent orchestration.
+- Node.js 18 or newer and npm.
+- A PESU Academy account.
+- Internet access (login, navigation, and PDF retrieval all hit the live site).
+- On Linux, the usual Chromium runtime libraries (electron-builder/Playwright pull most in; a system Chromium is used as a last-resort fallback).
 
-### Layers
+---
 
-- `src/core`: runtime logic, downloader pipeline, browser resolution, progress, and logging.
-- `src/cli`: command-line interface that invokes the core downloader directly.
-- `src/desktop`: Electron main process, preload bridge, and renderer UI.
-
-### Data Flow
-
-`UI -> Core -> Browser -> PESU -> PDF -> Filesystem`
-
-More concretely:
-
-1. The Electron UI collects username, password, and output directory.
-2. The Electron main process calls `runPESUDownloader(...)`.
-3. The core downloader resolves Chromium through `browserResolver`.
-4. Playwright automates PESU Academy and identifies downloadable slide artifacts.
-5. PDFs are written to the local filesystem using the course and unit hierarchy.
-6. Logs and progress events are streamed back to the UI.
-
-## Project Structure
-
-### `src/core/`
-
-Core automation and runtime services.
-
-- `browserResolver.js`: development vs packaged Chromium resolution.
-- `downloader.js`: primary Playwright pipeline and PESU traversal logic.
-- `pesuAgent.js`: small orchestration wrapper around the downloader.
-- `logger.js`: structured log emission with credential redaction.
-- `progressStore.js`: progress persistence and UI-facing progress events.
-- `fileUtils.js`: shared filesystem and serialization helpers.
-
-### `src/desktop/`
-
-Electron desktop application.
-
-- `main.js`: Electron main process, IPC, folder picker, open-folder action, downloader invocation.
-- `preload.js`: `contextBridge` API surface exposed to the renderer.
-- `renderer/`: HTML, CSS, and client-side UI logic.
-
-### `src/cli/`
-
-CLI entrypoint for developer or power-user usage.
-
-- `index.js`: argument parsing and invocation of the core downloader.
-
-### `scripts/`
-
-Operational helper scripts.
-
-- `pesu-agent.js`: legacy wrapper preserved for compatibility.
-- `install-playwright-chromium.js`: installs the managed Playwright Chromium bundle.
-
-### `memory/`
-
-Runtime memory and diagnostic state produced by the downloader.
-
-- learned selectors
-- progress history
-- operator notes
-
-These files are useful during debugging, but they are not part of the release payload.
-
-## Installation
-
-### Linux AppImage
-
-1. Download the latest AppImage artifact.
-2. Make it executable:
+## Installation & Setup
 
 ```bash
-chmod +x "PESU Academy Slide Downloader-<version>.AppImage"
-```
+# 1. Clone the repository
+git clone <your-fork-url> pesu-slide-downloader
+cd pesu-slide-downloader
 
-3. Run it:
-
-```bash
-./"PESU Academy Slide Downloader-<version>.AppImage"
-```
-
-### Developer Setup
-
-1. Install dependencies:
-
-```bash
+# 2. Install dependencies
+#    The "postinstall" hook automatically downloads the managed Chromium
+#    bundle into ./playwright-browsers via Playwright.
 npm install
-```
 
-2. Install the managed Playwright Chromium bundle:
-
-```bash
+# 3. (Optional) re-run the browser install explicitly if step 2 was skipped
 npm run playwright:install
+
+# 4. (CLI only) create your .env from the template
+cp .env.example .env
+# then edit .env and set PESU_USERNAME and PESU_PASSWORD
 ```
 
-3. Start the Electron app in development mode:
+The managed Chromium bundle is intentionally vendored into `./playwright-browsers`
+so packaged desktop builds don't depend on a separately installed system browser.
+
+---
+
+## Running the App
+
+### Desktop (recommended)
 
 ```bash
 npm run desktop
 ```
 
-The Playwright browser dependency is required. The project installs and uses a managed Chromium bundle so packaged builds do not rely on a separately installed system browser.
+Then, in the window:
 
-## Usage
+1. Enter your PESU **username** and **password** (kept in memory for this run only).
+2. Click **Browse** to choose a download folder (defaults to `~/Downloads/PESU_Academy`).
+3. Pick an **Automation speed** (Fast / Normal / Slow / Safe), or `Custom delay…` for an exact value in ms.
+4. Click **Start Download**. A real Chromium window opens and the run begins.
+5. Watch the **Live Log** and the Downloaded / Skipped / Failed counters.
+6. Use **Stop** to cancel cleanly, or **Open Folder** to view results.
 
-1. Open the desktop application.
-2. Enter PESU username and password.
-3. Choose the download folder.
-4. Choose an **Automation speed** (Fast / Normal / Slow / Safe), or pick `Custom delay…` to enter a precise delay in milliseconds.
-5. Click `Start Download`.
-6. Monitor logs, counts, and progress in the UI. Use `Stop` to cancel a running download cleanly.
-7. Open the output folder when the run completes.
+### CLI
 
-The selected automation speed is printed in the live log at the start of each run.
-
-For developer workflows, the CLI and legacy wrapper remain available:
+The CLI reads credentials from `.env` (or flags) and drives the same core engine.
 
 ```bash
-npm run cli -- --headless
-npm run cli -- --speed safe
-npm run cli -- --delay-ms 1800
-npm run pesu:agent
+npm run cli                       # uses PESU_USERNAME / PESU_PASSWORD from .env
+npm run cli -- --headless         # run Chromium headless
+npm run cli -- --speed safe       # slowest, most reliable preset
+npm run cli -- --delay-ms 1800    # custom inter-action delay (overrides --speed)
+npm run cli -- --output ~/slides  # custom output directory
+npm run cli -- --help             # full flag reference
 ```
 
-### Automation speed
+| Flag | Description |
+| --- | --- |
+| `--username <value>` | PESU username (default: `PESU_USERNAME` from `.env`) |
+| `--password <value>` | PESU password (default: `PESU_PASSWORD` from `.env`) |
+| `--output <dir>` / `--outputDir <dir>` | Download root directory |
+| `--headless` | Run Chromium without a visible window |
+| `--speed <fast\|normal\|slow\|safe>` | Automation speed preset |
+| `--delay-ms <0-60000>` | Custom action delay in ms (overrides `--speed`) |
+| `--help`, `-h` | Show help |
 
-Both the desktop UI and the CLI expose how long the downloader pauses between
-browser actions. Slower speeds are more reliable on flaky connections or when
-PESU Academy updates content slowly through AJAX.
+A legacy wrapper, `npm run pesu:agent`, runs the same core with fixed defaults
+and is kept for backwards compatibility.
 
-| Preset   | Action delay |
-| -------- | ------------ |
-| `fast`   | 250 ms       |
-| `normal` | 800 ms (default) |
-| `slow`   | 1400 ms      |
-| `safe`   | 2200 ms      |
-
-CLI flags:
-
-- `--speed <fast|normal|slow|safe>` — choose a preset.
-- `--delay-ms <number>` — set a custom delay in milliseconds (0–60000). This overrides `--speed`.
-
-Invalid values produce a clear error and a non-zero exit code.
+> **Note:** `npm run pesu` and `npm run pesu:debug` run `scripts/pesu-download-slides.js`,
+> an older standalone prototype that prompts for manual login. The maintained
+> path is the desktop app and `npm run cli`.
 
 ### Tests
-
-Pure logic (unit normalization, unit matching, table fingerprinting, speed
-parsing, and duplicate-source detection) is covered by a dependency-free test
-runner:
 
 ```bash
 npm test
 ```
 
+This runs two dependency-free suites with no browser required:
+
+- `tests/unit.test.js` — pure helpers (unit parsing, fingerprinting, speed parsing, duplicate detection).
+- `tests/simulation.test.js` — an in-memory mock of the PESU SPA that drives the **real** navigation code to prove each unit's slides land in the correct folder, even under the adversarial "sticky active tab" / "Back to Units resets to Unit 1" conditions.
+
+### Packaged builds
+
+```bash
+npm run build:linux   # AppImage (validated)
+npm run build:win     # NSIS installer (configured, needs validation)
+npm run build:mac     # DMG (configured, needs signing + validation)
+```
+
+Artifacts are written to `./dist`. The Chromium bundle in `playwright-browsers`
+is included as an extra resource so the installed app is self-contained.
+
+---
+
+## Environment Variables
+
+All variables are optional for the desktop app (it uses its UI). The CLI and the
+`pesu:agent` script read `PESU_USERNAME` / `PESU_PASSWORD` from `.env`. See
+[`.env.example`](./.env.example) for a copy-paste template.
+
+| Variable | Used by | Default | Description |
+| --- | --- | --- | --- |
+| `PESU_USERNAME` | CLI, `pesu:agent` | — | PESU login, default when `--username` is omitted. |
+| `PESU_PASSWORD` | CLI, `pesu:agent` | — | PESU password, default when `--password` is omitted. |
+| `PESU_AGENT_DELAY_MS` | core downloader | `800` (or `1400` if `PWDEBUG`) | Inter-action delay in ms. Overridden by the CLI/desktop speed settings. |
+| `PWDEBUG` | Playwright, npm scripts | unset | Enables Playwright's inspector and bumps the default delay to 1400 ms. |
+| `PLAYWRIGHT_BROWSERS_PATH` | Playwright / browser resolver | auto | Where to find the managed Chromium bundle. Normally set automatically. |
+
+---
+
+## Automation Speed
+
+Both the desktop UI and CLI control how long the downloader pauses between browser
+actions. Slower speeds are more reliable on flaky connections or when PESU updates
+unit content slowly through AJAX.
+
+| Preset | Action delay |
+| --- | --- |
+| `fast` | 250 ms |
+| `normal` | 800 ms (default) |
+| `slow` | 1400 ms |
+| `safe` | 2200 ms |
+| custom | any value 0–60000 ms (`--delay-ms` or "Custom delay…") |
+
+Invalid values produce a clear error and a non-zero exit code.
+
+---
+
 ## Output Format
 
-Downloads are written into the existing PESU hierarchy:
+Downloads mirror the PESU hierarchy:
 
 ```text
-downloads/PESU_Academy/<Course>/<Unit>/<PDFs>
+<output-dir>/
+  UQ25CA651B - Algorithms Analysis and Design/
+    Unit 01 - Introduction, Analysis Framework and Sorting Techniques/
+      01 - Introduction.pdf
+      02 - Recurrence Relations.pdf
+    Unit 02 - Searching and Graph Problems/
+      01 - ...
 ```
 
-Typical structure:
+- Course folder: `<CourseCode> - <Course Title>`
+- Unit folder: `Unit NN - <Unit Name>`
+- File: `NN - <Class Title>.pdf` (with `(Slide NN)` suffix when a class has multiple slide assets)
+
+Existing files are skipped, enabling safe restart/resume.
+
+---
+
+## Project Structure
 
 ```text
-downloads/
-  PESU_Academy/
-    UQ25CA651B - Algorithms Analysis and Design/
-      Unit 01/
-        01 Introduction.pdf
-        02 Recurrence Relations.pdf
+pesu-slide-downloader/
+├── package.json                 # Scripts, deps, electron-builder config
+├── .env.example                 # Environment template (copy to .env)
+├── README.md                    # This file
+├── DOCUMENTATION.md             # Deep technical reference
+├── CHANGELOG.md                 # Version history
+│
+├── src/
+│   ├── core/                    # Browser-agnostic automation engine
+│   │   ├── downloader.js        # Main Playwright pipeline & PESU traversal (~2600 LOC)
+│   │   ├── browserResolver.js   # Resolves the right Chromium binary (dev vs packaged vs system)
+│   │   ├── pesuAgent.js         # Thin factory wrapping runPESUDownloader + requestStop
+│   │   ├── unitTools.js         # Pure helpers: unit identity, fingerprints, speed parsing
+│   │   ├── progressStore.js     # Progress persistence + UI progress events
+│   │   ├── logger.js            # Structured logging with credential redaction
+│   │   └── fileUtils.js         # ensureDir / sanitizeName / JSON load+save / timestamps
+│   │
+│   ├── cli/
+│   │   └── index.js             # CLI entrypoint: arg parsing → core engine
+│   │
+│   └── desktop/                 # Electron application
+│       ├── main.js              # Main process: window, IPC handlers, run lifecycle
+│       ├── preload.js           # contextBridge API exposed to the renderer
+│       └── renderer/            # Front-end (no framework)
+│           ├── index.html       # UI layout
+│           ├── renderer.js      # UI logic, event wiring, log/progress rendering
+│           └── styles.css       # Styling
+│
+├── scripts/
+│   ├── install-playwright-chromium.js   # Installs Chromium into ./playwright-browsers
+│   ├── pesu-agent.js                    # Legacy core wrapper (env-credential run)
+│   └── pesu-download-slides.js          # Original standalone prototype (manual login)
+│
+├── tests/
+│   ├── unit.test.js             # Pure-logic unit tests
+│   └── simulation.test.js       # In-memory SPA simulation of the navigation logic
+│
+├── memory/                      # Runtime/diagnostic state (not part of releases)
+│   ├── pesu-progress.json       # Downloaded/failed/history ledger
+│   ├── pesu-learned-selectors.json   # Selectors that worked, cached for future runs
+│   └── pesu-notes.md            # Append-only operator notes/log
+│
+└── playwright-browsers/         # Vendored managed Chromium bundle (git-ignored)
 ```
 
-The downloader skips files that already exist, which enables restart and resume behavior without re-downloading completed PDFs.
+Generated at runtime and git-ignored: `downloads/`, `logs/`, `screenshots/`,
+`debug/`, `dist/`, `.chromium-profile/`, `.tmp-downloads/`, `node_modules/`,
+`.env`.
 
-## Security
+---
 
-- Credentials are not stored permanently by the application.
-- Username and password are used only for the active run.
-- No downloader data is sent to external services beyond direct communication with PESU Academy.
-- Execution is local to the user machine.
-- Logs redact runtime credentials if they appear in emitted messages.
+## How It Works
 
-## Current Status
+```text
+ UI / CLI ──► pesuAgent.run() ──► runPESUDownloader()
+                                      │
+                                      ▼
+   browserResolver → launch persistent Chromium (Playwright)
+                                      │
+        login → My Courses → for each course:
+                                      │
+              discover units → for each unit:
+                  openUnitVerified()  (prove the right unit is active)
+                       │
+                  for each class row:
+                       ensureUnitActive() → open slide → find PDF source
+                       → directDownload() / saveBlob() / Playwright download
+                       → write Course/Unit/NN - Title.pdf  (skip if exists)
+                       → return to unit table
+                                      │
+                       progressStore + logger stream events back to the UI
+```
 
-- Linux: fully working, with AppImage build validated.
-- Windows: packaging is configured and requires runtime validation.
-- macOS: packaging is configured and requires signing and runtime validation.
+Key reliability mechanism: PESU swaps unit content via AJAX and its "Back to Units"
+control silently resets to Unit 1. The downloader re-discovers units with fresh
+selectors on every transition and refuses to save slides until it can **prove**
+(via active-tab signal, heading match, or a row/source content fingerprint) that
+the intended unit is actually loaded — failing loudly with a debug bundle rather
+than saving the wrong unit's slides. Full details in
+[DOCUMENTATION.md](./DOCUMENTATION.md).
 
-## Reliability: verified unit activation
-
-PESU Academy swaps unit content through dynamic AJAX updates rather than full
-page loads. To guarantee that the slides saved for a unit actually belong to
-that unit, the downloader now **verifies the active unit before saving any
-PDFs**:
-
-- Units are re-discovered with fresh selectors before every unit transition, so
-  stale post-AJAX selectors are never reused.
-- Before navigating, the current slide table is fingerprinted (row count,
-  visible row text, and slide source handlers).
-- After clicking the intended unit, the run waits until at least one reliable
-  signal proves the unit changed: the active tab/control matches the intended
-  unit, a heading/breadcrumb names it, or the slide table fingerprint changes
-  from the previous unit.
-- If activation cannot be proven, the run retries with a freshly discovered
-  selector and then **fails that unit loudly** with a debug bundle instead of
-  silently saving the previous unit's slides.
-- As a final safeguard, if a unit resolves to the exact same set of source URLs
-  as the previous unit, the run records a high-confidence wrong-unit warning and
-  refuses to treat those downloads as valid.
+---
 
 ## Troubleshooting
 
-- **Unit 2/3/4 downloads Unit 1 again:** This was the original bug and is now
-  guarded against by verified unit activation. If you still see it, run in
-  `safe` speed (`--speed safe`, or "Safe" in the desktop UI) so AJAX content has
-  time to settle, then inspect the latest `debug/` bundle
-  (`*-unit-activation-failed-*.png/.html/.json`) to see what the page showed.
-- **A unit fails with "Could not prove Unit NN became active":** PESU did not
-  switch units in time. Re-run in `slow` or `safe` speed. The run continues with
-  the remaining units rather than saving wrong-unit content.
-- **"Unit source fingerprint matches previous unit":** The downloader detected
-  two units producing identical PDF sources and refused to count them as valid.
-  Re-run in a slower speed and check the debug bundle.
+- **Unit 2/3/4 downloads Unit 1 again** — the original SPA bug, now guarded by verified unit activation. If you still see it, run in `safe` speed and inspect the latest `debug/*-unit-activation-failed-*.{png,html,json}` bundle.
+- **"Could not prove Unit NN became active"** — PESU didn't switch units in time. Re-run in `slow` or `safe`. The run continues with the remaining units rather than saving wrong content.
+- **"Unit source fingerprint matches previous unit"** — two units produced identical PDF sources; the downloader refused to count them. Re-run slower and check the debug bundle.
+- **"Browser not installed"** — run `npm run playwright:install` to (re)download the Chromium bundle.
+- **"No slide table could be inferred"** — a unit had no detectable slides table (e.g. video-only units). This is recorded as a failure for that unit and the run moves on.
+- **Login fails / sign-in page stays** — double-check credentials; a `debug/login-failed-*` bundle is captured.
 
-## Limitations
+Logs are written to `logs/pesu-download.log`; per-step diagnostics (screenshot +
+HTML + JSON) go to `debug/`.
 
-- The downloader depends on the current PESU Academy UI structure.
-- Internet access is required for login, navigation, and PDF retrieval.
-- Browser automation can break if PESU changes page structure, selectors, or viewer behavior.
-- Some edge cases still rely on adaptive heuristics rather than PESU-provided stable APIs.
+---
+
+## Security & Privacy
+
+- Credentials are never persisted by the app — they live in memory for the active run only.
+- No data is sent anywhere except directly to PESU Academy; everything runs locally.
+- All logs redact your username and password if they ever appear in a message.
+- `.env` is git-ignored and excluded from packaged builds.
+
+---
 
 ## Roadmap
 
-### A. Course Selection UI
+- **Course/Unit selection UI** — checkboxes to download only chosen courses/units.
+- **Better progress UX** — true progress bar, per-download retry actions.
+- **Performance** — controlled parallel downloads, fewer redundant reloads.
+- **Packaging** — signed Windows `.exe` and macOS `.dmg`, icons and branding.
+- **Reliability** — broader retry/recovery, more viewer-variant coverage.
 
-- Fetch all courses immediately after login.
-- Display course checklists in the desktop UI.
-- Allow users to select only specific courses.
-- Support targeted downloads instead of full-account runs.
-
-### B. Unit Selection
-
-- Add per-unit checkbox selection.
-- Allow partial downloads inside a selected course.
-- Support resuming only selected incomplete units.
-
-### C. UI Improvements
-
-- Add a true progress bar.
-- Add a visible stop button wired to cancellation.
-- Add retry actions for failed downloads.
-
-### D. Performance
-
-- Introduce controlled parallel downloads where safe.
-- Reduce unnecessary navigation and page reloads.
-- Optimize repeated table and artifact detection.
-
-### E. Packaging
-
-- Produce polished Windows `.exe` installers.
-- Produce signed macOS `.dmg` builds.
-- Add proper icons, metadata, and branding assets.
-
-### F. Reliability
-
-- Expand retry and recovery logic.
-- Improve PDF source detection across viewer variations.
-- Strengthen navigation recovery when the PESU UI changes mid-run.
+---
 
 ## Contributing
 
-Contributions should preserve the current separation of concerns:
+Contributions should preserve the layered separation of concerns:
 
-- `src/core` for automation and runtime logic
-- `src/desktop` for Electron integration and UI
-- `src/cli` for command-line workflows
+- `src/core` — automation and runtime logic (no Electron/CLI specifics).
+- `src/desktop` — Electron integration and UI.
+- `src/cli` — command-line workflows.
 
-Recommended contribution workflow:
+Suggested workflow:
 
-1. Install dependencies and the managed Playwright browser.
-2. Reproduce the issue using the desktop or CLI entrypoint.
+1. `npm install` and `npm run playwright:install`.
+2. Reproduce the issue via the desktop app or `npm run cli`.
 3. Keep changes localized to the correct layer.
-4. Validate syntax and at least one runtime path before opening a pull request.
+4. Run `npm test` (and at least one real runtime path) before opening a PR.
+
+---
+
+## License
+
+ISC. See [`package.json`](./package.json).
+
+---
 
 ## Disclaimer
 
-This project is intended for educational use by PESU students. It automates actions that a user could otherwise perform manually through the PESU Academy interface. Users are responsible for operating it in a manner consistent with institutional policies and platform usage expectations.
+This project is intended for educational use by PESU students. It automates
+actions a user could otherwise perform manually through the PESU Academy
+interface. Users are responsible for operating it consistently with institutional
+policies and platform usage expectations.

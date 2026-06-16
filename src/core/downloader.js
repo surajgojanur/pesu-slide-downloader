@@ -11,7 +11,9 @@ const {
   findUnitByIdentity,
   fingerprintSlidesTable,
   fingerprintsDiffer,
-  isDuplicateSourceSet
+  isDuplicateSourceSet,
+  isCourseSelected,
+  isUnitSelected
 } = require('./unitTools');
 
 const PROJECT_ROOT = path.resolve(__dirname, '../..');
@@ -2472,6 +2474,107 @@ async function returnToMyCourses(page) {
   await goToMyCourses(page);
 }
 
+// Discovery-only phase: log in, list every course, and open each course just far
+// enough to read its unit tabs. Returns a catalog the UI/CLI can present for
+// selection. Downloads nothing.
+async function discoverCatalog(options = {}) {
+  if (runtime) {
+    throw new Error('A PESU operation is already active');
+  }
+
+  runtime = buildRuntime(options);
+  initFiles();
+
+  log('Discovering courses and units (no downloads in this phase)');
+  getProgressStore().note('Discovery started', { stage: 'discovering' });
+
+  let context;
+
+  try {
+    context = await runtime.browser.chromium.launchPersistentContext(getPaths().profileDir, {
+      headless: runtime.headless,
+      executablePath: runtime.browser.executablePath,
+      acceptDownloads: true,
+      downloadsPath: getPaths().tempDownloadDir,
+      viewport: { width: 1440, height: 960 },
+      args: ['--start-maximized']
+    });
+    context.setDefaultTimeout(DEFAULT_TIMEOUT);
+
+    let page = context.pages()[0];
+    if (!page) {
+      page = await context.newPage();
+    }
+
+    await withRetries('Open PESU Academy', async () => {
+      await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: DEFAULT_TIMEOUT });
+      await waitForStablePage(page);
+    });
+
+    await loginIfNeeded(page);
+    await goToMyCourses(page);
+
+    const initialCourses = await discoverCourses(page);
+    const catalog = [];
+
+    for (let courseIndex = 0; courseIndex < initialCourses.length; courseIndex += 1) {
+      throwIfStopRequested('catalog discovery');
+      await returnToMyCourses(page).catch(() => {});
+      const refreshedCourses = await discoverCourses(page);
+      const courseChoice = refreshedCourses[courseIndex];
+      if (!courseChoice) {
+        continue;
+      }
+
+      const code = courseChoice.courseCode || '';
+      const title = courseChoice.courseTitle || '';
+      const fallbackLabel = courseChoice.text || `${code} - ${title}`.trim();
+      getProgressStore().note(`Discovering units for ${code || fallbackLabel}`, {
+        discovery: { courseIndex: courseIndex + 1, courseTotal: initialCourses.length, label: fallbackLabel }
+      });
+
+      try {
+        const course = await openCourse(page, courseChoice);
+        const detectedUnits = await discoverUnits(page, course.label).catch(() => []);
+        catalog.push({
+          code: code || course.identity.code,
+          title: title || course.identity.name,
+          label: course.label,
+          units: detectedUnits.map((unit) => {
+            const identity = normalizeUnitIdentity(unit.text);
+            return {
+              number: identity.number ?? unit.number ?? null,
+              text: unit.text,
+              dirName: unit.dirName
+            };
+          })
+        });
+      } catch (error) {
+        log(`Could not read units for ${fallbackLabel}: ${error.message}`);
+        catalog.push({
+          code,
+          title,
+          label: fallbackLabel,
+          units: [],
+          error: error.message
+        });
+      }
+    }
+
+    log(`Discovery complete: ${catalog.length} course(s) found`);
+    getProgressStore().note('Discovery finished', { stage: 'discovered', catalog });
+    return catalog;
+  } catch (error) {
+    getRuntime().logger.error(`Discovery error: ${error.stack || error.message}`);
+    getProgressStore().note(error.message, { stage: 'discovery-failed', error: error.message });
+    throw error;
+  } finally {
+    log('Finished discovery phase');
+    await context?.close().catch(() => {});
+    runtime = null;
+  }
+}
+
 async function runPESUDownloader(options = {}) {
   if (runtime) {
     throw new Error('A PESU downloader run is already active');
@@ -2480,8 +2583,17 @@ async function runPESUDownloader(options = {}) {
   runtime = buildRuntime(options);
   initFiles();
 
+  const selection = options.selection || null;
+
   log('Starting PESU adaptive browser agent');
   log(`Automation speed: ${options.speedLabel || `${runtime.actionDelayMs}ms per action`} (action delay ${runtime.actionDelayMs}ms)`);
+  if (selection && Array.isArray(selection.courses)) {
+    log(
+      `Selection: ${selection.courses
+        .map((entry) => `${entry.key}${entry.units && entry.units.length ? ` [units ${entry.units.join(',')}]` : ''}`)
+        .join(' | ')}`
+    );
+  }
   log(`Using Chromium executable (${runtime.browser.source}): ${runtime.browser.executablePath}`);
   appendNote('Run Start', 'Agent run started with Playwright automation and runtime-configured credentials.');
   getProgressStore().note('Downloader started', { stage: 'starting' });
@@ -2513,7 +2625,28 @@ async function runPESUDownloader(options = {}) {
     await goToMyCourses(page);
 
     const initialCourses = await discoverCourses(page);
-    for (let courseIndex = 0; courseIndex < initialCourses.length; courseIndex += 1) {
+
+    // Apply any course selection up front so unselected courses are never opened.
+    const plannedCourseIndices = initialCourses
+      .map((courseChoice, index) => ({ courseChoice, index }))
+      .filter(({ courseChoice }) => isCourseSelected(selection, courseChoice))
+      .map(({ index }) => index);
+    const courseTotal = plannedCourseIndices.length;
+
+    if (selection) {
+      const skipped = initialCourses.length - courseTotal;
+      log(
+        `Course selection active: processing ${courseTotal} of ${initialCourses.length} course(s)` +
+          (skipped > 0 ? ` (${skipped} skipped)` : '')
+      );
+    }
+
+    if (!courseTotal) {
+      log('No courses matched the current selection. Nothing to download.');
+    }
+
+    for (let position = 0; position < plannedCourseIndices.length; position += 1) {
+      const courseIndex = plannedCourseIndices[position];
       throwIfStopRequested('course discovery');
       await returnToMyCourses(page).catch(() => {});
       const refreshedCourses = await discoverCourses(page);
@@ -2523,24 +2656,60 @@ async function runPESUDownloader(options = {}) {
         continue;
       }
 
+      // Re-check selection in case the discovery order shifted between passes.
+      if (!isCourseSelected(selection, courseChoice)) {
+        log(`Skipping course (not selected): ${courseChoice.text || courseChoice.courseCode || courseIndex + 1}`);
+        continue;
+      }
+
       const course = await openCourse(page, courseChoice);
       ensureDir(course.directory);
-      getProgressStore().note(`Processing course ${course.label}`);
+      getProgressStore().note(`Processing course ${course.label}`, {
+        nav: {
+          courseIndex: position + 1,
+          courseTotal,
+          courseLabel: course.label
+        }
+      });
 
       const detectedUnits = await discoverUnits(page, course.label);
-      const unitPlan = detectedUnits.map((unit) => ({
-        ...unit,
-        identity: normalizeUnitIdentity(unit.text)
-      }));
+      const unitPlan = detectedUnits
+        .map((unit) => ({
+          ...unit,
+          identity: normalizeUnitIdentity(unit.text)
+        }))
+        .filter((unit) =>
+          isUnitSelected(selection, courseChoice, unit.identity.number ?? unit.number)
+        );
       log(
-        `Detected units: ${unitPlan
-          .map((unit) => `Unit ${pad2(unit.identity.number ?? unit.number)}`)
+        `Detected units: ${detectedUnits
+          .map((unit) => `Unit ${pad2(normalizeUnitIdentity(unit.text).number ?? unit.number)}`)
           .join(' | ')}`
       );
+      if (selection && unitPlan.length !== detectedUnits.length) {
+        log(
+          `Unit selection active: processing ${unitPlan.length} of ${detectedUnits.length} unit(s) in ${course.label}`
+        );
+      }
+      if (!unitPlan.length) {
+        log(`No selected units to process for ${course.label}. Skipping course.`);
+        continue;
+      }
 
       let previousUnitState = null;
-      for (const unit of unitPlan) {
+      for (let unitIndex = 0; unitIndex < unitPlan.length; unitIndex += 1) {
+        const unit = unitPlan[unitIndex];
         throwIfStopRequested(`course ${course.label}`);
+        getProgressStore().note(`Processing ${course.label} / ${unit.text}`, {
+          nav: {
+            courseIndex: position + 1,
+            courseTotal,
+            courseLabel: course.label,
+            unitIndex: unitIndex + 1,
+            unitTotal: unitPlan.length,
+            unitLabel: `Unit ${pad2(unit.identity.number ?? unit.number ?? unitIndex + 1)}`
+          }
+        });
         try {
           previousUnitState = await processUnit(page, context, course, unit, previousUnitState);
         } catch (error) {
@@ -2593,6 +2762,7 @@ async function runPESUDownloader(options = {}) {
 module.exports = {
   requestStop,
   runPESUDownloader,
+  discoverCatalog,
   // Test-only hooks: let an in-memory simulation drive the real navigation logic
   // without launching a browser. Not part of the public API.
   __test: {
